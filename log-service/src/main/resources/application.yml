@@ -1,0 +1,24 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: log-service
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+logging:
+  file:
+    name: ./logs/chat_log.txt
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
