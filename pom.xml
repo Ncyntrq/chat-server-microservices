@@ -30,5 +30,6 @@
         <module>log-service</module>
 		<module>gateway-service</module>
 		<module>presence-service</module>
+        <module>messaging-service</module>
     </modules>
 </project>
