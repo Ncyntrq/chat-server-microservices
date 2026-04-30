@@ -383,3 +383,117 @@ Phân công ban đầu (`doc/phan_cong_project.md`) chỉ định **Người D**
 - ✅ `docker-compose.yml` (root) — RabbitMQ + log-service đã chạy được. Người D / cả team chỉ cần thêm service block khi module mình sẵn sàng.
 
 Người D vẫn giữ vai trò Integration Lead cho phần phức tạp hơn (cross-service debug, network giữa các container, healthcheck đầy đủ stack, troubleshoot khi tích hợp xong).
+
+---
+
+# Bàn Giao Người C (Messaging Service) → Team
+
+> **Người C đã hoàn thành:** `messaging-service`.
+> **Tích hợp:** Đã áp dụng `common-lib` và chuẩn bị các điểm gọi (REST calls) tới Auth và Presence.
+
+## 12. Tổng quan phần Messaging Service
+
+### 12.1. Module hoàn thành
+
+| Module | Trạng thái | Vị trí | Port |
+|--------|------------|--------|------|
+| `messaging-service` | ✅ Hoàn thành code | `messaging-service/` | `8082` |
+
+### 12.2. Tính năng đã triển khai
+
+- **WebSocket server** tại endpoint `/ws/chat` (Sử dụng Raw WebSocket `TextWebSocketHandler`, KHÔNG dùng STOMP).
+- **Xác thực JWT** khi handshake (gọi sang `auth-service` qua REST API).
+- **Quản lý Session**: Lưu trữ `WebSocketSession` map theo `username` trong `ConcurrentHashMap`.
+- **Xử lý tin nhắn**: 
+  - `CHAT` (Broadcast cho tất cả mọi người).
+  - `PRIVATE` (Gửi 1-1, đồng thời gửi lại cho sender để confirm).
+  - `PING` (nhận) / `PONG` (trả về) để keep-alive kết nối.
+- **Tích hợp RabbitMQ**: Bắn sự kiện log (JOIN, LEAVE, CHAT, PRIVATE, ...) sang `chat.exchange` cho `log-service` xử lý, sử dụng `LogEntry` chuẩn từ `common-lib`.
+- **Tích hợp Presence**: Báo cáo trạng thái online/offline sang `presence-service` khi có session connect/disconnect.
+
+---
+
+## 13. Hướng dẫn sử dụng & Tích hợp (Cho team B, D, E)
+
+### 13.1. Kết nối WebSocket (Dành cho Client / Người E)
+
+- **Endpoint**: `ws://localhost:8082/ws/chat?token=<JWT_TOKEN>`
+- **Giao thức**: Gửi và nhận message dưới dạng chuỗi JSON map với class `MessageDTO`.
+- **Mã lỗi đóng kết nối (Close Status)**:
+  - `4001`: Token không hợp lệ hoặc xác thực thất bại tại Auth Service.
+
+### 13.2. Cấu trúc tin nhắn (MessageDTO)
+
+Client cần gửi payload JSON:
+
+**Gửi tin nhắn Broadcast (CHAT):**
+```json
+{
+  "type": "CHAT",
+  "content": "Xin chào mọi người!"
+}
+```
+
+**Gửi tin nhắn Private (PRIVATE):**
+```json
+{
+  "type": "PRIVATE",
+  "receiver": "nguoinhan",
+  "content": "Chào bạn, mình gửi tin nhắn riêng nhé!"
+}
+```
+
+**Ping (Giữ kết nối):**
+```json
+{
+  "type": "PING"
+}
+```
+*(Server sẽ reply ngay lập tức `{"type":"PONG"}`)*
+
+### 13.3. Hợp đồng API với Auth Service (Dành cho Người B)
+
+Khi một Client kết nối WS tới `messaging-service`, nó sẽ trích xuất tham số `token` ở query URL và gọi API sang `auth-service` (cấu hình biến `${services.auth-url}`) để xác thực.
+- **Endpoint yêu cầu `auth-service` cung cấp**: `POST /api/auth/validate`
+- **Payload `messaging-service` gửi đi**: 
+  ```json
+  {"token": "chuoi_jwt_token_cua_client"}
+  ```
+- **Response `messaging-service` mong đợi**:
+  ```json
+  {
+    "valid": true,
+    "username": "nguyen"
+  }
+  ```
+> **Người B (`auth-service`) chú ý:** Bạn cần đảm bảo endpoint `/api/auth/validate` tuân thủ đúng logic và response định dạng như trên.
+
+### 13.4. Hợp đồng API với Presence Service (Dành cho Người D)
+
+Khi người dùng online (sau khi handshake và xác thực token thành công) hoặc offline (mất kết nối WS), `messaging-service` sẽ bắn thông báo sang `presence-service` (cấu hình qua biến `${services.presence-url}`).
+- **Endpoint yêu cầu `presence-service` cung cấp**:
+  - `POST /api/presence/connect?username=<username>`
+  - `POST /api/presence/disconnect?username=<username>`
+> **Người D (`presence-service`) chú ý:** Bạn cần thiết kế 2 API REST trên. Hiện `messaging-service` gọi và không cần body response (chỉ cần http status 2xx).
+
+### 13.5. Sự kiện RabbitMQ (Đã nối đúng chuẩn với log-service của Người A)
+
+- Sử dụng `chat.exchange` và bắn log mọi message qua method `publishLogEvent`.
+- Routing key động: `log.<type>` (ví dụ: `log.chat`, `log.private`, `log.join`, `log.leave`).
+- Chuyển hóa đối tượng sử dụng `Jackson2JsonMessageConverter`. 
+
+---
+
+## 14. Kiểm thử cục bộ Messaging Service
+
+Do `messaging-service` phụ thuộc trực tiếp vào **Auth Service** (ngay từ bước kết nối đầu tiên) và **RabbitMQ** (để gửi event), bạn cần:
+1. Đảm bảo container RabbitMQ đang chạy.
+2. Cần có `auth-service` chạy ở port tương ứng (mặc định cấu hình gọi sang). Nếu `auth-service` chưa hoàn thiện, bạn có thể tạm thời *mock* REST response của nó hoặc comment code gọi RestTemplate trong `ChatWebSocketHandler` nếu chỉ muốn test luồng chat thuần.
+3. Chạy `messaging-service` từ thư mục gốc:
+   ```bash
+   ./mvnw -pl messaging-service spring-boot:run
+   ```
+4. Test qua công cụ thứ 3 như Postman WebSocket Client hoặc `wscat`:
+   ```bash
+   wscat -c "ws://localhost:8082/ws/chat?token=TOKEN_HOP_LE"
+   ```
