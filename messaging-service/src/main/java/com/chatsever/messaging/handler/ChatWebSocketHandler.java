@@ -13,7 +13,8 @@ import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
-
+import com.chatsever.common.dto.AuthResponse;
+import com.chatsever.common.dto.AuthRequest;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,19 +33,21 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        String token = extractToken(session);
-        // Xác thực qua Auth Service
-        Map<String, Object> res = restTemplate.postForObject(authUrl + "/api/auth/validate", Map.of("token", token), Map.class);
-
-        if (res != null && (Boolean) res.get("valid")) {
-            String username = (String) res.get("username");
-            sessions.put(username, session);
-            session.getAttributes().put("username", username);
-
-            messageService.notifyPresence(username, "connect"); // Gọi service báo online
-            messageService.broadcast(new MessageDTO(MessageType.JOIN, "SERVER", null, username + " tham gia!", LocalDateTime.now()), sessions);
-        } else {
-            session.close(new CloseStatus(4001, "Invalid token"));
+       String token = extractToken(session);
+       try
+       {
+           Map<String, String> request = Map.of("token", token);
+           AuthResponse response = restTemplate.postForObject(authUrl + "/api/auth/validate", request, AuthResponse.class);
+           if(response != null && response.getUsername() != null) {
+               String username = response.getUsername();
+               sessions.put(username, session);
+               session.getAttributes().put("username", username);
+               messageService.notifyPresence(username, "connect");
+               messageService.broadcast(new MessageDTO(MessageType.JOIN, "SERVER", null, username + " đã vào!", LocalDateTime.now()), sessions);
+           }
+       }
+        catch (Exception e) {
+            session.close(new CloseStatus(4001, "Xác thực thất bại: " + e.getMessage()));
         }
     }
 
@@ -60,7 +63,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             case PRIVATE -> messageService.sendPrivate(msg, session, sessions);
             case PING -> session.sendMessage(new TextMessage("{\"type\":\"PONG\"}"));
         }
-        messageService.publishLogEvent(msg); // Bắn log bất đồng bộ
+        messageService.publishLogEvent(msg);
     }
 
     @Override
