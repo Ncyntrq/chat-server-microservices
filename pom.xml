@@ -31,5 +31,8 @@
 		<module>gateway-service</module>
 		<module>presence-service</module>
         <module>auth-service</module>
+        <module>messaging-service</module>
+        <module>notification-service</module>
+        <module>file-service</module>
     </modules>
 </project>
