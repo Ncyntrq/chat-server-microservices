@@ -3,6 +3,7 @@ package gui.auth;
 import gui.components.AuthHeader;
 import gui.components.FormField;
 import gui.components.PrimaryButton;
+import gui.ChatClientGUI;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
@@ -33,9 +34,31 @@ public class LoginPanel extends JPanel {
         // Login Button
         PrimaryButton loginButton = new PrimaryButton("Log In", e -> {
             String user = usernameField.getText();
-            String pass = passwordField.getText();
-            System.out.println("Attempting login with: " + user + " / " + pass);
+            System.out.println("Mock Login Success! Opening App...");
             // TODO: Call ApiClient POST /api/auth/login
+
+            Window window = SwingUtilities.getWindowAncestor(this);
+            if (window != null) {
+                window.dispose();
+            }
+
+            ChatClientGUI mainGui = new ChatClientGUI(user);
+            mainGui.setVisible(true);
+
+            // MOCK DATA INJECTION
+            mainGui.setOnlineUsers(java.util.List.of("admin", "Alice_Engineer", "Bob_Technician"));
+
+            mainGui.appendMessage(new com.chatsever.common.dto.MessageDTO(
+                    com.chatsever.common.enums.MessageType.CHAT, "Alice_Engineer", null,
+                    "Hệ thống liên lạc không gian sâu đã trực tuyến. Tín hiệu ổn định.",
+                    java.time.LocalDateTime.now()
+            ));
+
+            mainGui.appendMessage(new com.chatsever.common.dto.MessageDTO(
+                    com.chatsever.common.enums.MessageType.CHAT, "Bob_Technician", null,
+                    "@admin Phát hiện bất thường ở mảng ăng-ten thứ cấp.",
+                    java.time.LocalDateTime.now()
+            ));
         });
 
         // Register Link
