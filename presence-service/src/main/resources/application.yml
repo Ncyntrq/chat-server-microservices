@@ -4,13 +4,12 @@ server:
 spring:
   application:
     name: presence-service
-  rabbitmq:
-    host: ${SPRING_RABBITMQ_HOST:localhost}
-    port: 5672
-    username: guest
-    password: guest
-
-# Để debug cho dễ
-logging:
-  level:
-    org.springframework.web: DEBUG
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/chat_server_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC
+    username: root
+    password: ${MYSQL_PASSWORD:root}
+  jpa:
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false # Tắt log SQL cho đỡ rối màn hình

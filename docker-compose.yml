@@ -38,7 +38,7 @@ services:
       context: .
       dockerfile: gateway-service/Dockerfile
     ports:
-      - "8080:8080"
+      - "8080:8080"  # Cánh cửa chính của toàn hệ thống
     depends_on:
       - auth-service
       - messaging-service
@@ -61,8 +61,10 @@ services:
     networks:
       - chat-net
     environment:
-      - MYSQL_HOST=mysql-db
-      - MYSQL_PASSWORD=root
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/chat_server?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.MySQL8Dialect
     depends_on:
       - mysql-db
 
@@ -81,6 +83,11 @@ services:
       dockerfile: presence-service/Dockerfile
     networks:
       - chat-net
+    environment:
+      - MYSQL_HOST=mysql-db
+      - MYSQL_PASSWORD=root
+    depends_on:
+        - mysql-db
 
   log-service:
     build:

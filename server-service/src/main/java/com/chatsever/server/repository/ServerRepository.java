@@ -2,9 +2,9 @@ package com.chatsever.server.repository;
 
 import com.chatsever.server.model.Server;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+import java.util.Optional;
 
-@Repository
 public interface ServerRepository extends JpaRepository<Server, Long> {
-    boolean existsByInviteCode(String inviteCode);
+    // Đã tối ưu truy vấn để không load toàn bộ RAM
+    Optional<Server> findByInviteCode(String inviteCode);
 }
