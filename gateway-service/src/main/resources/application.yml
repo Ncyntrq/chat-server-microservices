@@ -52,3 +52,13 @@ spring:
 # Cấu hình bảo mật để JwtAuthFilter sử dụng
 jwt:
   secret: chatsever-jwt-secret-key-2026
+
+# Cấu hình Health Check (G3)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always

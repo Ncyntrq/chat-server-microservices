@@ -1,29 +1,88 @@
 package com.chatsever.server.service.impl;
 
-import com.chatsever.server.model.Server;
-import com.chatsever.server.repository.ServerRepository;
+import com.chatsever.server.model.*;
+import com.chatsever.server.repository.*;
 import com.chatsever.server.service.ServerService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import java.util.List;
+import org.springframework.transaction.annotation.Transactional;
 
-@Service // Bắt buộc phải có để Spring nhận diện đây là lớp Service
+import java.util.*;
+
+@Service
+@RequiredArgsConstructor
 public class ServerServiceImpl implements ServerService {
-
     private final ServerRepository serverRepository;
-
-    // Viết Constructor tay thay vì dùng Lombok để tránh lỗi đỏ nãy giờ
-    public ServerServiceImpl(ServerRepository serverRepository) {
-        this.serverRepository = serverRepository;
-    }
+    private final MemberRepository memberRepository;
+    private final ChannelRepository channelRepository;
 
     @Override
+    @Transactional
     public Server createServer(Server server, String ownerId) {
-        server.setOwnerId(ownerId); // Chuyển logic từ Controller sang đây
-        return serverRepository.save(server);
+        server.setInviteCode(UUID.randomUUID().toString().substring(0, 8));
+        server.setOwnerId(ownerId);
+        Server saved = serverRepository.save(server);
+
+        memberRepository.save(Member.builder()
+                .serverId(saved.getId()).userId(ownerId).role(MemberRole.OWNER).build());
+        return saved;
     }
 
     @Override
-    public List<Server> getAllServers() {
-        return serverRepository.findAll();
+    public List<Server> getMyServers(String userId) {
+        List<Long> ids = memberRepository.findByUserId(userId).stream().map(Member::getServerId).toList();
+        return serverRepository.findAllById(ids);
+    }
+
+    @Override
+    public Map<String, Object> getServerDetails(Long serverId) {
+        Server s = serverRepository.findById(serverId).orElseThrow();
+        Map<String, Object> details = new HashMap<>();
+        details.put("server", s);
+        details.put("channels", channelRepository.findByServerId(serverId));
+        details.put("members", memberRepository.findByServerId(serverId));
+        return details;
+    }
+
+    @Override
+    public Server updateServer(Long id, Server details, String uid) {
+        Server s = serverRepository.findById(id).orElseThrow();
+        if(!s.getOwnerId().equals(uid)) throw new RuntimeException("No permission");
+        s.setName(details.getName());
+        s.setDescription(details.getDescription());
+        return serverRepository.save(s);
+    }
+
+    @Override
+    @Transactional
+    public void deleteServer(Long id, String uid) {
+        Server s = serverRepository.findById(id).orElseThrow();
+        if(!s.getOwnerId().equals(uid)) throw new RuntimeException("No permission");
+        memberRepository.deleteByServerId(id);
+        channelRepository.deleteByServerId(id);
+        serverRepository.delete(s);
+    }
+
+    @Override
+    public void joinServer(String code, String uid) {
+        Server s = serverRepository.findByInviteCode(code).orElseThrow();
+        if(!memberRepository.existsByServerIdAndUserId(s.getId(), uid)) {
+            memberRepository.save(Member.builder().serverId(s.getId()).userId(uid).role(MemberRole.MEMBER).build());
+        }
+    }
+
+    @Override
+    public void leaveServer(Long id, String uid) {
+        Member m = memberRepository.findByServerIdAndUserId(id, uid).orElseThrow();
+        if(m.getRole() == MemberRole.OWNER) throw new RuntimeException("Owner cannot leave");
+        memberRepository.delete(m);
+    }
+
+    @Override
+    public String generateNewInviteCode(Long id, String uid) {
+        Server s = serverRepository.findById(id).orElseThrow();
+        if(!s.getOwnerId().equals(uid)) throw new RuntimeException("No permission");
+        s.setInviteCode(UUID.randomUUID().toString().substring(0, 8));
+        return serverRepository.save(s).getInviteCode();
     }
 }

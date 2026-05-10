@@ -5,21 +5,22 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "servers")
+@Table(name = "members")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Server {
+public class Member {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private String name;
-    private String description;
-    private String ownerId;
-    private String inviteCode;
-    private LocalDateTime createdAt;
+    private String userId;
+    private Long serverId;
+
+    @Enumerated(EnumType.STRING)
+    private MemberRole role;
+    private LocalDateTime joinedAt;
 
     @PrePersist
-    protected void onCreate() { createdAt = LocalDateTime.now(); }
+    protected void onCreate() { joinedAt = LocalDateTime.now(); }
 }
