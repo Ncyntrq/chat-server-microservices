@@ -1,0 +1,71 @@
+### 1. Test Đăng ký (Tự động tạo UUID và Avatar mặc định)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "phat_uit_v2",
+  "password": "matkhau123"
+}
+
+### 2. Test Đăng nhập (Lấy Access Token & Refresh Token)
+POST http://localhost:8081/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "phat_uit_v2",
+  "password": "matkhau123"
+}
+
+### 3. Test lấy Profile (Dành cho ông bạn A gọi sang)
+# QUAN TRỌNG:
+# 1. Thay thế <ĐIỀN_USER_ID_VÀO_ĐÂY> bằng cái userId lấy được ở bước 2
+# 2. Thay thế <ĐIỀN_ACCESS_TOKEN_VÀO_ĐÂY> bằng chuỗi accessToken lấy được ở bước 2
+GET http://localhost:8081/api/users/profile/caa4fc35-3de8-45f4-bca3-d35d8bdef4b4
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJwaGF0X3VpdF92MiIsInVzZXJJZCI6ImNhYTRmYzM1LTNkZTgtNDVmNC1iY2EzLWQzNWQ4YmRlZjRiNCIsInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3Nzg1MzAzNTQsImV4cCI6MTc3ODUzNzU1NH0.y3h4CbwaLFR96J86fHzj21xPrjk6mZ6m7C4Ll9vdii4
+
+### 4. Test Đổi Refresh Token lấy Access Token mới
+POST http://localhost:8081/api/auth/refresh
+Content-Type: application/json
+
+{
+  "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJwaGF0X3VpdF92MiIsImlhdCI6MTc3ODUzMDM1NCwiZXhwIjoxNzc5MTM1MTU0fQ.Q7SG1oAinsn_8RhA2lG-X5HUxTyiIPu_FqIa91K0n4A"
+}
+### 5. Test Cập nhật Profile (Đổi Avatar, Bio, Tên hiển thị)
+# Nhớ thay <USER_ID> và <ACCESS_TOKEN> giống như lúc test lấy Profile nhé
+PUT http://localhost:8081/api/users/caa4fc35-3de8-45f4-bca3-d35d8bdef4b4/profile
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJwaGF0X3VpdF92MiIsInVzZXJJZCI6ImNhYTRmYzM1LTNkZTgtNDVmNC1iY2EzLWQzNWQ4YmRlZjRiNCIsInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3Nzg1MzAzNTQsImV4cCI6MTc3ODUzNzU1NH0.y3h4CbwaLFR96J86fHzj21xPrjk6mZ6m7C4Ll9vdii4
+Content-Type: application/json
+
+{
+  "displayName": "Phát SE",
+  "avatarUrl": "https://imgur.com/avatar-moi-cuc-ngau.png",
+  "bio": "Sinh viên Kỹ thuật phần mềm UIT, chúa tể fix bug, kẻ hủy diệt deadline."
+}
+
+### 6. Test Đổi mật khẩu
+PUT http://localhost:8081/api/users/caa4fc35-3de8-45f4-bca3-d35d8bdef4b4/password
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJwaGF0X3VpdF92MiIsInVzZXJJZCI6ImNhYTRmYzM1LTNkZTgtNDVmNC1iY2EzLWQzNWQ4YmRlZjRiNCIsInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3Nzg1MzAzNTQsImV4cCI6MTc3ODUzNzU1NH0.y3h4CbwaLFR96J86fHzj21xPrjk6mZ6m7C4Ll9vdii4
+Content-Type: application/json
+
+{
+  "oldPassword": "matkhau123",
+  "newPassword": "matkhaumoi456"
+}
+
+### 7. Test Đổi Quyền (Thăng cấp lên ADMIN)
+PUT http://localhost:8081/api/users/caa4fc35-3de8-45f4-bca3-d35d8bdef4b4/role
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJwaGF0X3VpdF92MiIsInVzZXJJZCI6ImNhYTRmYzM1LTNkZTgtNDVmNC1iY2EzLWQzNWQ4YmRlZjRiNCIsInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3Nzg1MzAzNTQsImV4cCI6MTc3ODUzNzU1NH0.y3h4CbwaLFR96J86fHzj21xPrjk6mZ6m7C4Ll9vdii4
+Content-Type: application/json
+
+{
+  "role": "ADMIN"
+}
+
+### 8. Test BAN NICK (Khóa tài khoản)
+PUT http://localhost:8081/api/users/caa4fc35-3de8-45f4-bca3-d35d8bdef4b4/role
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJwaGF0X3VpdF92MiIsInVzZXJJZCI6ImNhYTRmYzM1LTNkZTgtNDVmNC1iY2EzLWQzNWQ4YmRlZjRiNCIsInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3Nzg1MzAzNTQsImV4cCI6MTc3ODUzNzU1NH0.y3h4CbwaLFR96J86fHzj21xPrjk6mZ6m7C4Ll9vdii4
+Content-Type: application/json
+
+{
+  "role": "BANNED"
+}

@@ -3,9 +3,10 @@ package com.chatsever.auth.dto;
 import lombok.*;
 
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-public class AuthResponse {
+public class UserProfileResponse {
     private String userId;
-    private String accessToken;
-    private String refreshToken;
     private String username;
+    private String displayName;
+    private String avatarUrl;
+    private String bio;
 }
