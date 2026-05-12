@@ -45,9 +45,9 @@
         <module>presence-service</module>
         <module>messaging-service</module>
         <module>gateway-service</module>
-        <module>server-service</module>
-        <module>channel-service</module>
-        <!-- Merge thêm từ nhánh của bạn -->
+        <!-- server-service, channel-service: chưa tạo thư mục — bỏ comment khi có code -->
+        <!-- <module>server-service</module> -->
+        <!-- <module>channel-service</module> -->
         <module>notification-service</module>
         <module>file-service</module>
     </modules>
