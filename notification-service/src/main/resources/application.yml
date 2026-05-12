@@ -1,0 +1,34 @@
+# Cấu hình notification-service — Spring Boot
+# Dev profile: H2 in-memory, RabbitMQ localhost
+
+server:
+  port: 8088
+
+spring:
+  application:
+    name: notification-service
+  # Dev profile: H2
+  datasource:
+    url: jdbc:h2:mem:notificationdb
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+  h2:
+    console:
+      enabled: true
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: 5672
+    username: guest
+    password: guest
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

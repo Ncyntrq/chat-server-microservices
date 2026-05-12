@@ -1,0 +1,44 @@
+# ===== Cấu hình file-service — Spring Boot =====
+# Môi trường dev: dùng H2 in-memory (DB tạm), MinIO local
+
+server:
+  port: 8089                          # Port chạy file-service
+
+spring:
+  application:
+    name: file-service
+  # --- Cấu hình Database (H2 in-memory cho dev, production đổi sang MySQL) ---
+  datasource:
+    url: jdbc:h2:mem:filedb
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop           # Tự tạo/xóa bảng mỗi lần khởi động (chỉ dùng cho dev)
+    show-sql: true                     # In câu SQL ra console để debug
+  h2:
+    console:
+      enabled: true                    # Bật giao diện H2 Console tại /h2-console
+  # --- Giới hạn upload file ---
+  servlet:
+    multipart:
+      max-file-size: 10MB             # Tối đa 10MB mỗi file
+      max-request-size: 12MB          # Tối đa 12MB mỗi request (bao gồm header)
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false # Trả ngày tháng dạng ISO-8601 thay vì timestamp
+
+# --- Cấu hình MinIO (Object Storage để lưu file) ---
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}   # Địa chỉ MinIO server
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}           # Tài khoản mặc định
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}           # Mật khẩu mặc định
+  buckets:
+    files: chat-files                  # Bucket chứa file gốc
+    thumbnails: chat-thumbnails        # Bucket chứa ảnh thu nhỏ (thumbnail)
+
+# --- Actuator: expose endpoint health check ---
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info           # Chỉ mở health và info

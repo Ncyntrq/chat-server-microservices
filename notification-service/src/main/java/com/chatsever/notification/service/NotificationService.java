@@ -1,0 +1,142 @@
+package com.chatsever.notification.service;
+
+import com.chatsever.notification.dto.AckRequest;
+import com.chatsever.notification.dto.NotificationDTO;
+import com.chatsever.notification.dto.UnreadCountResponse;
+import com.chatsever.notification.model.Notification;
+import com.chatsever.notification.model.NotificationType;
+import com.chatsever.notification.model.ReadStatus;
+import com.chatsever.notification.repository.NotificationRepository;
+import com.chatsever.notification.repository.ReadStatusRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+/**
+ * Business logic cho notification:
+ * - Tạo notification (mention, message, DM)
+ * - Đếm unread count
+ * - Đánh dấu đã đọc
+ */
+@Service
+public class NotificationService {
+
+    private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
+
+    private final NotificationRepository notificationRepository;
+    private final ReadStatusRepository readStatusRepository;
+
+    public NotificationService(NotificationRepository notificationRepository,
+                               ReadStatusRepository readStatusRepository) {
+        this.notificationRepository = notificationRepository;
+        this.readStatusRepository = readStatusRepository;
+    }
+
+    /**
+     * Tạo 1 notification cho user cụ thể.
+     */
+    @Transactional
+    public Notification createNotification(String userId, Long channelId, Long serverId,
+                                           String sender, NotificationType type, String content) {
+        Notification notification = new Notification(userId, channelId, serverId, sender, type, content);
+        Notification saved = notificationRepository.save(notification);
+        log.info("Tạo notification: userId={}, type={}, sender={}", userId, type, sender);
+        return saved;
+    }
+
+    /**
+     * Lấy danh sách notification theo userId.
+     * Nếu unreadOnly=true → chỉ lấy chưa đọc.
+     */
+    public List<NotificationDTO> getNotifications(String userId, boolean unreadOnly) {
+        List<Notification> notifications;
+        if (unreadOnly) {
+            notifications = notificationRepository.findByUserIdAndIsReadFalseOrderByCreatedAtDesc(userId);
+        } else {
+            notifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        }
+        return notifications.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Đánh dấu 1 notification đã đọc.
+     */
+    @Transactional
+    public void markAsRead(Long notificationId) {
+        notificationRepository.findById(notificationId).ifPresent(n -> {
+            n.setRead(true);
+            notificationRepository.save(n);
+            log.debug("Marked notification {} as read", notificationId);
+        });
+    }
+
+    /**
+     * Đánh dấu đã đọc cho channel — cập nhật read_status + mark notifications.
+     * POST /api/channels/{channelId}/ack
+     */
+    @Transactional
+    public void acknowledgeChannel(Long channelId, AckRequest request) {
+        String userId = request.getUserId();
+        Long lastMessageId = request.getLastMessageId();
+
+        // Cập nhật hoặc tạo read_status
+        ReadStatus readStatus = readStatusRepository
+                .findByUserIdAndChannelId(userId, channelId)
+                .orElse(new ReadStatus(userId, channelId, 0L));
+
+        readStatus.setLastReadMsgId(lastMessageId);
+        readStatus.setLastReadAt(LocalDateTime.now());
+        readStatusRepository.save(readStatus);
+
+        // Đánh dấu tất cả notification chưa đọc trong channel này là đã đọc
+        List<Notification> unread = notificationRepository
+                .findByUserIdAndIsReadFalseOrderByCreatedAtDesc(userId)
+                .stream()
+                .filter(n -> channelId.equals(n.getChannelId()))
+                .toList();
+
+        for (Notification n : unread) {
+            n.setRead(true);
+        }
+        notificationRepository.saveAll(unread);
+
+        log.info("Ack channel={} userId={} lastMsgId={}, marked {} notifications as read",
+                channelId, userId, lastMessageId, unread.size());
+    }
+
+    /**
+     * Đếm số notification chưa đọc mỗi channel cho userId.
+     */
+    public UnreadCountResponse getUnreadCounts(String userId) {
+        List<Notification> unreadNotifications = notificationRepository
+                .findByUserIdAndIsReadFalse(userId);
+
+        Map<Long, Long> counts = new HashMap<>();
+        for (Notification n : unreadNotifications) {
+            Long chId = n.getChannelId();
+            if (chId != null) {
+                counts.merge(chId, 1L, Long::sum);
+            }
+        }
+
+        return new UnreadCountResponse(userId, counts);
+    }
+
+    /** Convert Entity → DTO */
+    private NotificationDTO toDTO(Notification n) {
+        return new NotificationDTO(
+                n.getId(), n.getUserId(), n.getChannelId(), n.getServerId(),
+                n.getSender(), n.getType(), n.getContent(),
+                n.isRead(), n.getCreatedAt()
+        );
+    }
+}
