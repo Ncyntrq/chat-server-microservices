@@ -7,22 +7,19 @@ public class UserStatus {
     private Status status;
     private LocalDateTime lastSeen;
 
-    // Constructor không đối số (No-args)
     public UserStatus() {}
 
-    // Constructor đầy đủ đối số (All-args) - ĐÂY LÀ DÒNG GIẢI QUYẾT LỖI CỦA BẠN
     public UserStatus(String userId, Status status, LocalDateTime lastSeen) {
         this.userId = userId;
         this.status = status;
         this.lastSeen = lastSeen;
     }
 
-    // Enum trạng thái
+    // Đã bổ sung thêm IDLE, DO_NOT_DISTURB, INVISIBLE cho đủ chuẩn P5
     public enum Status {
-        ONLINE, OFFLINE, AWAY
+        ONLINE, OFFLINE, AWAY, IDLE, DO_NOT_DISTURB, INVISIBLE
     }
 
-    // Getter và Setter (để các module khác đọc được dữ liệu)
     public String getUserId() { return userId; }
     public void setUserId(String userId) { this.userId = userId; }
     public Status getStatus() { return status; }
