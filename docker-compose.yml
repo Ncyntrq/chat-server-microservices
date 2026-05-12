@@ -154,8 +154,75 @@ services:
       - MINIO_SECRET_KEY=password123
     depends_on:
       - minio
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
     networks:
       - chat-net
+    depends_on:
+      - mysql-db
+
+  server-service:
+    build:
+      context: .
+      dockerfile: server-service/Dockerfile
+    networks:
+      - chat-net
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/chat_server_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.MySQL8Dialect
+      - CHANNEL_SERVICE_URL=http://channel-service:8086
+    depends_on:
+      - mysql-db
+      - channel-service
+
+  channel-service:
+    build:
+      context: .
+      dockerfile: channel-service/Dockerfile
+    networks:
+      - chat-net
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/chat_channel_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.MySQL8Dialect
+      - MYSQL_HOST=mysql-db
+      - MYSQL_PASSWORD=root
+    depends_on:
+      - mysql-db
+
+  messaging-service:
+    build:
+      context: .
+      dockerfile: messaging-service/Dockerfile
+    networks:
+      - chat-net
+    depends_on:
+      - rabbitmq
+
+  presence-service:
+    build:
+      context: .
+      dockerfile: presence-service/Dockerfile
+    networks:
+      - chat-net
+    environment:
+      - MYSQL_HOST=mysql-db
+      - MYSQL_PASSWORD=root
+    depends_on:
+      - mysql-db
+
+  log-service:
+    build:
+      context: .
+      dockerfile: log-service/Dockerfile
+    networks:
+      - chat-net
+    depends_on:
+      - rabbitmq
 
 networks:
   chat-net:
