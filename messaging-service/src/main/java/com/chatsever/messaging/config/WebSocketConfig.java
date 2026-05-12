@@ -8,9 +8,15 @@ import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
 
+/**
+ * Cấu hình WebSocket cho messaging-service.
+ * Đăng ký endpoint /ws/chat để client kết nối real-time.
+ */
 @Configuration
 @EnableWebSocket
 public class WebSocketConfig implements WebSocketConfigurer {
+
+    // Handler xử lý tin nhắn WebSocket (nhận/gửi message)
     private final ChatWebSocketHandler chatHandler;
 
     public WebSocketConfig(ChatWebSocketHandler chatHandler) {
@@ -19,6 +25,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+        // Đăng ký handler tại đường dẫn /ws/chat, cho phép mọi origin (CORS)
         registry.addHandler(chatHandler, "/ws/chat").setAllowedOrigins("*");
     }
 }

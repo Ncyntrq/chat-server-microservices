@@ -19,6 +19,7 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    // Xử lý lỗi: không tìm thấy file → trả 404
     @ExceptionHandler(FileNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleFileNotFound(FileNotFoundException ex) {
         log.warn("File not found: {}", ex.getMessage());
@@ -29,6 +30,7 @@ public class GlobalExceptionHandler {
         ));
     }
 
+    // Xử lý lỗi: file quá lớn (>10MB) → trả 413
     @ExceptionHandler(FileTooLargeException.class)
     public ResponseEntity<Map<String, Object>> handleFileTooLarge(FileTooLargeException ex) {
         log.warn("File too large: {}", ex.getMessage());
@@ -39,6 +41,7 @@ public class GlobalExceptionHandler {
         ));
     }
 
+    // Xử lý lỗi: Spring tự bắt khi request vượt max-request-size → trả 413
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Map<String, Object>> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
         log.warn("Max upload size exceeded: {}", ex.getMessage());
@@ -49,6 +52,7 @@ public class GlobalExceptionHandler {
         ));
     }
 
+    // Xử lý lỗi: tham số không hợp lệ (file rỗng, loại file không được hỗ trợ, …) → trả 400
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> handleBadRequest(IllegalArgumentException ex) {
         log.warn("Bad request: {}", ex.getMessage());
@@ -59,6 +63,7 @@ public class GlobalExceptionHandler {
         ));
     }
 
+    // Xử lý lỗi: mọi exception không mong đợi khác → trả 500
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneral(Exception ex) {
         log.error("Unexpected error: ", ex);
