@@ -1,7 +1,10 @@
 package com.chatsever.auth.controller;
 
-import com.chatsever.common.dto.AuthRequest;
-import com.chatsever.common.dto.AuthResponse;
+import com.chatsever.auth.dto.AuthRequest;
+import com.chatsever.auth.dto.AuthResponse;
+import com.chatsever.auth.dto.RefreshTokenRequest;
+import com.chatsever.auth.dto.ValidateRequest;
+import com.chatsever.auth.dto.ValidateResponse;
 import com.chatsever.auth.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -9,13 +12,10 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/auth")
+@RequiredArgsConstructor
 public class AuthController {
 
     private final AuthService authService;
-
-    public AuthController(AuthService authService) {
-        this.authService = authService;
-    }
 
     @PostMapping("/register")
     public ResponseEntity<String> register(@RequestBody AuthRequest request) {
@@ -26,9 +26,14 @@ public class AuthController {
     public ResponseEntity<AuthResponse> login(@RequestBody AuthRequest request) {
         return ResponseEntity.ok(authService.login(request));
     }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthResponse> refreshToken(@RequestBody RefreshTokenRequest request) {
+        return ResponseEntity.ok(authService.refreshToken(request));
+    }
+
     @PostMapping("/validate")
-    public ResponseEntity<AuthResponse> validate(@RequestBody java.util.Map<String, String> request) {
-        String token = request.get("token");
-        return ResponseEntity.ok(authService.validateToken(token));
+    public ResponseEntity<ValidateResponse> validate(@RequestBody ValidateRequest request) {
+        return ResponseEntity.ok(authService.validateToken(request));
     }
 }

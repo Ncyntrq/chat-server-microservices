@@ -2,43 +2,30 @@ package com.chatsever.auth.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import java.util.UUID;
 
 @Entity
 @Table(name = "users")
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class User {
-
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private String id;
 
-    @Column(unique = true, nullable = false, length = 50)
+    @Column(unique = true, nullable = false)
     private String username;
 
-    @Column(nullable = false, name = "password_hash")
+    @Column(nullable = false)
     private String passwordHash;
 
-    public User() {}
-    public User(Long id, String username, String passwordHash) {
-        this.id = id;
-        this.username = username;
-        this.passwordHash = passwordHash;
-    }
+    private String displayName;
+    private String avatarUrl;
+    private String bio;
+    private String role;
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    public String getUsername() { return username; }
-    public void setUsername(String username) { this.username = username; }
-    public String getPasswordHash() { return passwordHash; }
-    public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
-
-    public static UserBuilder builder() { return new UserBuilder(); }
-
-    public static class UserBuilder {
-        private String username;
-        private String passwordHash;
-
-        public UserBuilder username(String username) { this.username = username; return this; }
-        public UserBuilder passwordHash(String passwordHash) { this.passwordHash = passwordHash; return this; }
-        public User build() { return new User(null, username, passwordHash); }
+    @PrePersist
+    public void ensureId() {
+        if (this.id == null) {
+            this.id = UUID.randomUUID().toString();
+        }
     }
 }
