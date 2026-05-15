@@ -92,13 +92,13 @@ spring:
 
         # 9. Dịch vụ Quản lý File
         - id: file-service
-          uri: ${FILE_SERVICE_URL:http://localhost:8084}
+          uri: ${FILE_SERVICE_URL:http://localhost:8089}
           predicates:
             - Path=/api/files/**
 
         # 10. Dịch vụ Log
         - id: log-service
-          uri: ${LOG_SERVICE_URL:http://localhost:8090}
+          uri: ${LOG_SERVICE_URL:http://localhost:8084}
           predicates:
             - Path=/api/logs/**
 

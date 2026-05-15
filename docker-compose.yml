@@ -51,7 +51,7 @@ services:
       - MESSAGING_WS_URL=ws://messaging-service:8082
       - PRESENCE_SERVICE_URL=http://presence-service:8083
       - FILE_SERVICE_URL=http://file-service:8089
-      - LOG_SERVICE_URL=http://log-service:8087
+      - LOG_SERVICE_URL=http://log-service:8084
       - NOTIFICATION_SERVICE_URL=http://notification-service:8088
       - ROLE_SERVICE_URL=http://role-service:8090
       - USER_PROFILE_URL=http://user-profile-service:8091
@@ -99,9 +99,6 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/chat_channel_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
       - SPRING_DATASOURCE_USERNAME=root
       - SPRING_DATASOURCE_PASSWORD=root
-      - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.MySQL8Dialect
-      - MYSQL_HOST=mysql-db
-      - MYSQL_PASSWORD=root
     depends_on:
       - mysql-db
 
@@ -111,8 +108,17 @@ services:
       dockerfile: messaging-service/Dockerfile
     networks:
       - chat-net
+    environment:
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/chat_server_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - AUTH_SERVICE_URL=http://auth-service:8081
+      - PRESENCE_SERVICE_URL=http://presence-service:8083
+      - SERVER_SERVICE_URL=http://server-service:8085
     depends_on:
       - rabbitmq
+      - mysql-db
 
   presence-service:
     build:
@@ -121,8 +127,9 @@ services:
     networks:
       - chat-net
     environment:
-      - MYSQL_HOST=mysql-db
-      - MYSQL_PASSWORD=root
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/chat_server_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
     depends_on:
       - mysql-db
 
@@ -132,6 +139,8 @@ services:
       dockerfile: log-service/Dockerfile
     networks:
       - chat-net
+    environment:
+      - SPRING_RABBITMQ_HOST=rabbitmq
     depends_on:
       - rabbitmq
 

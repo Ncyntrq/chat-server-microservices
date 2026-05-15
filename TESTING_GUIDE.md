@@ -5,7 +5,7 @@ Tài liệu này hướng dẫn cách khởi chạy và kiểm thử các chức
 ## 1. Yêu cầu hệ thống (Prerequisites)
 - **Java 17+**: JDK 17 hoặc mới hơn.
 - **Maven**: Để build dự án (có thể sử dụng `mvnw` đi kèm).
-- **Docker & Docker Compose**: Để chạy các database và infrastructure (PostgreSQL, Redis, Kafka,...).
+- **Docker & Docker Compose**: Để chạy các database và infrastructure (MySQL, RabbitMQ, MinIO,...).
 - **Postman**: Công cụ để test các REST API và WebSocket.
 
 ## 2. Khởi chạy Infrastructure
@@ -112,6 +112,6 @@ Messaging Service xử lý chat realtime qua WebSocket.
      ```
 
 ## 6. Xử lý các lỗi thường gặp
-- **Lỗi kết nối CSDL (Connection Refused):** Đảm bảo docker-compose đã chạy và postgreSQL/redis đã khởi động thành công.
+- **Lỗi kết nối CSDL (Connection Refused):** Đảm bảo docker-compose đã chạy và MySQL/RabbitMQ đã khởi động thành công.
 - **Lỗi 401 Unauthorized:** Token đã hết hạn hoặc chưa cấu hình đúng `Authorization` header trên Postman. Hãy login lại để lấy token mới.
 - **Lỗi ClassNotFoundException cho common-lib:** Bạn quên chạy bước 3.1 (`mvn clean install -pl common-lib`).

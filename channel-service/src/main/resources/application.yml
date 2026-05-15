@@ -5,9 +5,9 @@ spring:
   application:
     name: channel-service
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/chat_channel_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
-    username: root
-    password: Nn3832143
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/chat_channel_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:Nn3832143}
   jpa:
     database-platform: org.hibernate.dialect.MySQL8Dialect
     hibernate:
