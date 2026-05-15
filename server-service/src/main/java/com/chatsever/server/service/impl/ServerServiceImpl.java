@@ -7,6 +7,8 @@ import com.chatsever.server.repository.ServerRepository;
 import com.chatsever.server.client.ChannelClient;
 import com.chatsever.server.service.ServerService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +46,14 @@ public class ServerServiceImpl implements ServerService {
     public List<Server> getMyServers(String userId) {
         List<Long> ids = memberRepository.findByUserId(userId).stream().map(Member::getServerId).toList();
         return serverRepository.findAllById(ids);
+    }
+
+    // NF13 — Paginated version
+    @Override
+    public Page<Server> getMyServers(String userId, Pageable pageable) {
+        List<Long> ids = memberRepository.findByUserId(userId).stream().map(Member::getServerId).toList();
+        if (ids.isEmpty()) return Page.empty(pageable);
+        return serverRepository.findByIdIn(ids, pageable);
     }
 
     @Override

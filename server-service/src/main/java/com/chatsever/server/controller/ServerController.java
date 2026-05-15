@@ -3,9 +3,10 @@ package com.chatsever.server.controller;
 import com.chatsever.server.model.Server;
 import com.chatsever.server.service.ServerService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -19,8 +20,16 @@ public class ServerController {
         return ResponseEntity.ok(serverService.createServer(s, uid));
     }
 
+    // NF13 — Có hỗ trợ pagination (page, size)
     @GetMapping
-    public ResponseEntity<List<Server>> getMy(@RequestHeader("X-User-Id") String uid) {
+    public ResponseEntity<?> getMy(
+            @RequestHeader("X-User-Id") String uid,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false, defaultValue = "20") Integer size) {
+        if (page != null) {
+            Page<Server> result = serverService.getMyServers(uid, PageRequest.of(page, size));
+            return ResponseEntity.ok(result);
+        }
         return ResponseEntity.ok(serverService.getMyServers(uid));
     }
 

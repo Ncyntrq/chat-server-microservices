@@ -63,10 +63,10 @@ public class MessageService {
     }
 
     // Gửi tin nhắn Broadcast theo Channel hoặc Global nếu serverId null
-    public void broadcast(MessageDTO msg, Map<String, WebSocketSession> sessions) throws Exception {
-        Set<String> channelMembers = null;
+    public void broadcastToChannel(MessageDTO msg, Map<String, WebSocketSession> sessions) throws Exception {
+        Set<String> serverMembers = null;
         if (msg.getServerId() != null) {
-            channelMembers = getChannelMembers(msg.getServerId());
+            serverMembers = getServerMembers(msg.getServerId());
         }
         
         String payload = objectMapper.writeValueAsString(msg);
@@ -74,7 +74,7 @@ public class MessageService {
             String username = entry.getKey();
             WebSocketSession s = entry.getValue();
             if (s.isOpen()) {
-                if (channelMembers == null || channelMembers.contains(username)) {
+                if (serverMembers == null || serverMembers.contains(username)) {
                     s.sendMessage(new TextMessage(payload));
                 }
             }
@@ -82,7 +82,7 @@ public class MessageService {
     }
 
     @SuppressWarnings("unchecked")
-    private Set<String> getChannelMembers(Long serverId) {
+    private Set<String> getServerMembers(Long serverId) {
         try {
             if (serverId == null) return Set.of();
             Map<String, Object> details = serverServiceClient.getServerDetails(serverId);
@@ -126,6 +126,11 @@ public class MessageService {
         rabbitTemplate.convertAndSend("chat.exchange", "log." + msg.getType().name().toLowerCase(), log);
     }
 
+    // Publish Notification Event sang RabbitMQ (cho notification-service)
+    public void publishNotificationEvent(MessageDTO msg) {
+        rabbitTemplate.convertAndSend("chat.exchange", "notify.message", msg);
+    }
+
     public void sendError(WebSocketSession session, String errorMsg) throws Exception {
         MessageDTO error = new MessageDTO(MessageType.ERROR, "SERVER", null, errorMsg, LocalDateTime.now());
         session.sendMessage(new TextMessage(objectMapper.writeValueAsString(error)));
@@ -155,5 +160,11 @@ public class MessageService {
 
     public void deleteMessage(Long messageId) {
         messageRepository.deleteById(messageId);
+    }
+
+    // M6: Kiểm tra quyền sở hữu tin nhắn
+    public boolean isMessageOwner(Long messageId, String username) {
+        ChatMessage entity = messageRepository.findById(messageId).orElse(null);
+        return entity != null && username.equals(entity.getSender());
     }
 }

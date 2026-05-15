@@ -7,13 +7,15 @@ server:
 spring:
   application:
     name: notification-service
-  # Dev profile: H2
+  # Dev: H2 in-memory | Docker: MySQL (override bằng env vars)
   datasource:
-    url: jdbc:h2:mem:notificationdb
-    driver-class-name: org.h2.Driver
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:mem:notificationdb}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER:org.h2.Driver}
+    username: ${SPRING_DATASOURCE_USERNAME:sa}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: ${SPRING_JPA_DDL_AUTO:create-drop}
     show-sql: true
   h2:
     console:

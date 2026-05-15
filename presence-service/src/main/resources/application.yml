@@ -5,7 +5,7 @@ spring:
   application:
     name: presence-service
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/chat_server_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC}
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/chat_presence_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC}
     username: ${SPRING_DATASOURCE_USERNAME:root}
     password: ${SPRING_DATASOURCE_PASSWORD:Nn3832143}
   jpa:
@@ -13,3 +13,9 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: false # Tắt log SQL cho đỡ rối màn hình
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

@@ -30,35 +30,61 @@ public class PresenceController {
         return "Presence Service is ONLINE - Chào mừng bạn đến với phòng 8083!";
     }
 
-    // Đã đổi sang @RequestHeader để nhận diện user từ Gateway
+    /**
+     * P1 — Đăng ký online.
+     * Hỗ trợ 2 cách gọi:
+     *   - Từ Gateway (qua header): X-User-Id
+     *   - Từ messaging-service internal (qua query param): ?username=xxx
+     */
     @PostMapping("/connect")
-    public ResponseEntity<Map<String, String>> connect(@RequestHeader("X-User-Id") String userId) {
+    public ResponseEntity<Map<String, String>> connect(
+            @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
+            @RequestParam(value = "username", required = false) String paramUsername) {
+        String userId = resolveUserId(headerUserId, paramUsername);
         presenceService.connect(userId);
         return ResponseEntity.ok(Map.of("message", "User connected", "status", "ONLINE"));
     }
 
+    /**
+     * P2 — Đăng ký offline.
+     * Hỗ trợ cả header và query param.
+     */
     @PostMapping("/disconnect")
-    public ResponseEntity<Map<String, String>> disconnect(@RequestHeader("X-User-Id") String userId) {
+    public ResponseEntity<Map<String, String>> disconnect(
+            @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
+            @RequestParam(value = "username", required = false) String paramUsername) {
+        String userId = resolveUserId(headerUserId, paramUsername);
         presenceService.disconnect(userId);
         return ResponseEntity.ok(Map.of("message", "User disconnected", "status", "OFFLINE"));
     }
 
+    /** P3 — Danh sách online */
     @GetMapping("/online")
     public ResponseEntity<List<String>> getOnlineUsers() {
         return ResponseEntity.ok(presenceService.getOnlineUsers());
     }
 
+    /** P4 — Kiểm tra trạng thái user */
     @GetMapping("/status/{userId}")
     public ResponseEntity<UserStatus> getStatus(@PathVariable String userId) {
         return ResponseEntity.ok(presenceService.getUserStatus(userId));
     }
 
-    // THÊM MỚI (P5): API cho phép user tự đổi trạng thái (VD: Đang bận)
+    /** P5 — Đổi trạng thái tùy chỉnh (ONLINE, IDLE, DO_NOT_DISTURB, INVISIBLE) */
     @PutMapping("/status")
     public ResponseEntity<Map<String, String>> updateCustomStatus(
             @RequestHeader("X-User-Id") String userId,
             @RequestParam UserStatus.Status status) {
         presenceService.updateCustomStatus(userId, status);
         return ResponseEntity.ok(Map.of("message", "Status updated to " + status));
+    }
+
+    /**
+     * Helper: ưu tiên header X-User-Id, fallback sang query param username.
+     */
+    private String resolveUserId(String headerUserId, String paramUsername) {
+        if (headerUserId != null && !headerUserId.isBlank()) return headerUserId;
+        if (paramUsername != null && !paramUsername.isBlank()) return paramUsername;
+        throw new IllegalArgumentException("Thiếu thông tin userId (header X-User-Id hoặc param username)");
     }
 }

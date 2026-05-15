@@ -95,11 +95,11 @@ Mọi request API từ client nên đi qua **API Gateway** (thường chạy ở
 
 ## 5. Hướng dẫn Test WebSocket (Messaging Service)
 
-Messaging Service xử lý chat realtime qua WebSocket.
+Messaging Service xử lý chat realtime qua WebSocket. **Luôn kết nối qua API Gateway (port 8080)**, không truy cập trực tiếp vào messaging-service.
 1. Mở một tab mới trong Postman, chọn **New** -> **WebSocket**.
-2. **URL kết nối:** `ws://localhost:8080/ws/chat` *(hoặc trỏ trực tiếp vào port của messaging-service nếu gateway không hỗ trợ chuyển tiếp WS)*.
-3. Trong phần **Headers** hoặc query parameter, bạn cần truyền Token để xác thực (tuỳ thuộc vào thiết kế xác thực WS của bạn). 
-   - Thông thường, WebSocket sẽ xác thực qua Query Param: `ws://localhost:8080/ws/chat?token=YOUR_JWT_TOKEN`
+2. **URL kết nối:** `ws://localhost:8080/ws/chat` *(Gateway sẽ proxy WS vào messaging-service — yêu cầu G2)*.
+3. Truyền JWT Token qua query parameter để xác thực:
+   - `ws://localhost:8080/ws/chat?token=YOUR_JWT_TOKEN`
 4. Ấn **Connect**.
 5. Sau khi kết nối thành công, bạn có thể gửi thử các message định dạng JSON (tuỳ thuộc vào format quy định trong `ChatWebSocketHandler`).
    - **Ví dụ Payload:**
