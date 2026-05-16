@@ -35,14 +35,21 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
             return chain.filter(exchange);
         }
 
-        // 2. Kiểm tra Header Authorization
+        // 2. Lấy Token từ Header hoặc Query Parameter
+        String token = null;
         String authHeader = request.getHeaders().getFirst("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            token = authHeader.substring(7);
+        } else {
+            // Hỗ trợ WebSocket: lấy token từ query parameter
+            token = request.getQueryParams().getFirst("token");
+        }
+
+        if (token == null || token.isEmpty()) {
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
-
-        String token = authHeader.substring(7);
 
         try {
             // 3. Giải mã Token
@@ -55,7 +62,8 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
 
             String username = claims.getSubject();
 
-            // 4. Bơm X-User-Id và X-Username vào Header cho các service sau (đúng ý Người C)
+            // 4. Bơm X-User-Id và X-Username vào Header cho các service sau (đúng ý Người
+            // C)
             ServerHttpRequest mutatedRequest = request.mutate()
                     .header("X-Username", username)
                     .header("X-User-Id", username)
