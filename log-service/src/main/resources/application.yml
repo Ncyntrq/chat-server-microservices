@@ -8,7 +8,7 @@ spring:
   application:
     name: log-service
   rabbitmq:
-    host: localhost     # Docker override: SPRING_RABBITMQ_HOST=rabbitmq
+    host: ${SPRING_RABBITMQ_HOST:localhost}     # Docker override: SPRING_RABBITMQ_HOST=rabbitmq
     port: 5672
     username: guest
     password: guest

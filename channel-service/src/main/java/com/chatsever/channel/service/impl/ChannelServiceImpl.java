@@ -2,7 +2,9 @@ package com.chatsever.channel.service.impl;
 
 import com.chatsever.channel.model.Channel;
 import com.chatsever.channel.model.ChannelType;
+import com.chatsever.channel.model.PinnedMessage;
 import com.chatsever.channel.repository.ChannelRepository;
+import com.chatsever.channel.repository.PinnedMessageRepository;
 import com.chatsever.channel.service.ChannelService;
 import com.chatsever.common.dto.ChannelDto;
 import com.chatsever.channel.dto.ChannelRequest;
@@ -15,9 +17,11 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("null")
 public class ChannelServiceImpl implements ChannelService {
-    
+
     private final ChannelRepository channelRepository;
+    private final PinnedMessageRepository pinnedMessageRepository;
 
     @Override
     @Transactional
@@ -26,6 +30,9 @@ public class ChannelServiceImpl implements ChannelService {
                 .name(request.getName())
                 .serverId(request.getServerId())
                 .type(ChannelType.valueOf(request.getType().toUpperCase()))
+                .topic(request.getTopic())
+                .slowmode(request.getSlowmode() != null ? request.getSlowmode() : 0)
+                .category(request.getCategory())
                 .build();
         channel = channelRepository.save(channel);
         return mapToDto(channel);
@@ -36,6 +43,22 @@ public class ChannelServiceImpl implements ChannelService {
         return channelRepository.findByServerId(serverId).stream()
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
+    }
+
+    // CH3 — Cập nhật channel (đổi tên, topic, slowmode, category)
+    @Override
+    @Transactional
+    public ChannelDto updateChannel(Long id, ChannelRequest request) {
+        Channel channel = channelRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Channel not found: " + id));
+
+        if (request.getName() != null) channel.setName(request.getName());
+        if (request.getTopic() != null) channel.setTopic(request.getTopic());
+        if (request.getSlowmode() != null) channel.setSlowmode(request.getSlowmode());
+        if (request.getCategory() != null) channel.setCategory(request.getCategory());
+
+        channel = channelRepository.save(channel);
+        return mapToDto(channel);
     }
 
     @Override
@@ -50,12 +73,39 @@ public class ChannelServiceImpl implements ChannelService {
         channelRepository.deleteByServerId(serverId);
     }
 
+    // CH6 — Ghim tin nhắn
+    @Override
+    @Transactional
+    public PinnedMessage pinMessage(Long channelId, Long messageId, String pinnedBy) {
+        // Check if already pinned
+        if (pinnedMessageRepository.findByChannelIdAndMessageId(channelId, messageId).isPresent()) {
+            throw new RuntimeException("Tin nhắn đã được ghim");
+        }
+        return pinnedMessageRepository.save(new PinnedMessage(channelId, messageId, pinnedBy));
+    }
+
+    // CH6 — Bỏ ghim
+    @Override
+    @Transactional
+    public void unpinMessage(Long channelId, Long messageId) {
+        pinnedMessageRepository.deleteByChannelIdAndMessageId(channelId, messageId);
+    }
+
+    // CH7 — Danh sách tin nhắn đã ghim
+    @Override
+    public List<PinnedMessage> getPinnedMessages(Long channelId) {
+        return pinnedMessageRepository.findByChannelIdOrderByPinnedAtDesc(channelId);
+    }
+
     private ChannelDto mapToDto(Channel channel) {
         return ChannelDto.builder()
                 .id(channel.getId())
                 .name(channel.getName())
                 .serverId(channel.getServerId())
                 .type(channel.getType().name())
+                .topic(channel.getTopic())
+                .slowmode(channel.getSlowmode())
+                .category(channel.getCategory())
                 .build();
     }
 }

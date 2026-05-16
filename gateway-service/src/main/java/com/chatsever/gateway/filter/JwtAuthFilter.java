@@ -12,12 +12,15 @@ import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
 
 @Component
 public class JwtAuthFilter implements GlobalFilter, Ordered {
+    private static final Logger logger = LoggerFactory.getLogger(JwtAuthFilter.class);
 
     @Value("${jwt.secret}")
     private String secretKey;
@@ -32,14 +35,21 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
             return chain.filter(exchange);
         }
 
-        // 2. Kiểm tra Header Authorization
+        // 2. Lấy Token từ Header hoặc Query Parameter
+        String token = null;
         String authHeader = request.getHeaders().getFirst("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            token = authHeader.substring(7);
+        } else {
+            // Hỗ trợ WebSocket: lấy token từ query parameter
+            token = request.getQueryParams().getFirst("token");
+        }
+
+        if (token == null || token.isEmpty()) {
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
-
-        String token = authHeader.substring(7);
 
         try {
             // 3. Giải mã Token
@@ -52,7 +62,8 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
 
             String username = claims.getSubject();
 
-            // 4. Bơm X-User-Id và X-Username vào Header cho các service sau (đúng ý Người C)
+            // 4. Bơm X-User-Id và X-Username vào Header cho các service sau (đúng ý Người
+            // C)
             ServerHttpRequest mutatedRequest = request.mutate()
                     .header("X-Username", username)
                     .header("X-User-Id", username)
@@ -61,8 +72,7 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
             return chain.filter(exchange.mutate().request(mutatedRequest).build());
 
         } catch (Exception e) {
-            System.err.println("JWT Validation Failed: " + e.getMessage());
-            e.printStackTrace();
+            logger.error("JWT Validation Failed: {}", e.getMessage(), e);
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }

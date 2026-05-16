@@ -10,6 +10,8 @@ import com.chatsever.notification.repository.NotificationRepository;
 import com.chatsever.notification.repository.ReadStatusRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +28,7 @@ import java.util.stream.Collectors;
  * - Đánh dấu đã đọc
  */
 @Service
+@SuppressWarnings("null")
 public class NotificationService {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
@@ -65,6 +68,17 @@ public class NotificationService {
         return notifications.stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
+    }
+
+    // NF13 — Paginated version
+    public Page<NotificationDTO> getNotifications(String userId, boolean unreadOnly, Pageable pageable) {
+        Page<Notification> page;
+        if (unreadOnly) {
+            page = notificationRepository.findByUserIdAndIsReadFalseOrderByCreatedAtDesc(userId, pageable);
+        } else {
+            page = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable);
+        }
+        return page.map(this::toDTO);
     }
 
     /**

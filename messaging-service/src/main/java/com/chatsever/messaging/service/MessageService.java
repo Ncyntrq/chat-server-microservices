@@ -14,6 +14,9 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -21,24 +24,27 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
+@SuppressWarnings("null")
 public class MessageService {
+    private static final Logger logger = LoggerFactory.getLogger(MessageService.class);
     private final RestTemplate restTemplate;
     private final RabbitTemplate rabbitTemplate;
     private final ObjectMapper objectMapper;
     private final ServerServiceClient serverServiceClient;
     private final MessageRepository messageRepository;
+    private final String presenceUrl;
 
-    @Value("${services.presence-url}") private String presenceUrl;
-
-    public MessageService(RestTemplate restTemplate, RabbitTemplate rabbitTemplate, ObjectMapper objectMapper, ServerServiceClient serverServiceClient, MessageRepository messageRepository) {
+    public MessageService(RestTemplate restTemplate, RabbitTemplate rabbitTemplate, ObjectMapper objectMapper, ServerServiceClient serverServiceClient, MessageRepository messageRepository, @Value("${services.presence-url}") String presenceUrl) {
         this.restTemplate = restTemplate;
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
         this.serverServiceClient = serverServiceClient;
         this.messageRepository = messageRepository;
+        this.presenceUrl = presenceUrl;
     }
 
     // Kiểm tra quyền của User
+    @SuppressWarnings("unchecked")
     public boolean hasPermission(Long serverId, String username) {
         try {
             Map<String, Object> details = serverServiceClient.getServerDetails(serverId);
@@ -51,16 +57,16 @@ public class MessageService {
                 }
             }
         } catch (Exception e) {
-            System.err.println("Error checking permission: " + e.getMessage());
+            logger.error("Error checking permission: {}", e.getMessage(), e);
         }
         return false;
     }
 
     // Gửi tin nhắn Broadcast theo Channel hoặc Global nếu serverId null
-    public void broadcast(MessageDTO msg, Map<String, WebSocketSession> sessions) throws Exception {
-        Set<String> channelMembers = null;
+    public void broadcastToChannel(MessageDTO msg, Map<String, WebSocketSession> sessions) throws Exception {
+        Set<String> serverMembers = null;
         if (msg.getServerId() != null) {
-            channelMembers = getChannelMembers(msg.getServerId());
+            serverMembers = getServerMembers(msg.getServerId());
         }
         
         String payload = objectMapper.writeValueAsString(msg);
@@ -68,14 +74,15 @@ public class MessageService {
             String username = entry.getKey();
             WebSocketSession s = entry.getValue();
             if (s.isOpen()) {
-                if (channelMembers == null || channelMembers.contains(username)) {
+                if (serverMembers == null || serverMembers.contains(username)) {
                     s.sendMessage(new TextMessage(payload));
                 }
             }
         }
     }
 
-    private Set<String> getChannelMembers(Long serverId) {
+    @SuppressWarnings("unchecked")
+    private Set<String> getServerMembers(Long serverId) {
         try {
             if (serverId == null) return Set.of();
             Map<String, Object> details = serverServiceClient.getServerDetails(serverId);
@@ -86,7 +93,7 @@ public class MessageService {
                         .collect(Collectors.toSet());
             }
         } catch (Exception e) {
-            System.err.println("Error fetching server members: " + e.getMessage());
+            logger.error("Error fetching server members: {}", e.getMessage(), e);
         }
         return Set.of();
     }
@@ -109,7 +116,7 @@ public class MessageService {
             String url = presenceUrl + "/api/presence/" + action + "?username=" + username;
             restTemplate.postForObject(url, null, Void.class);
         } catch (Exception e) {
-            System.err.println("Error notifying presence: " + e.getMessage());
+            logger.error("Error notifying presence: {}", e.getMessage(), e);
         }
     }
 
@@ -117,6 +124,11 @@ public class MessageService {
     public void publishLogEvent(MessageDTO msg) {
         LogEntry log = new LogEntry(msg.getTimestamp(), msg.getType().name(), msg.getSender(), msg.getReceiver(), msg.getContent());
         rabbitTemplate.convertAndSend("chat.exchange", "log." + msg.getType().name().toLowerCase(), log);
+    }
+
+    // Publish Notification Event sang RabbitMQ (cho notification-service)
+    public void publishNotificationEvent(MessageDTO msg) {
+        rabbitTemplate.convertAndSend("chat.exchange", "notify.message", msg);
     }
 
     public void sendError(WebSocketSession session, String errorMsg) throws Exception {
@@ -148,5 +160,11 @@ public class MessageService {
 
     public void deleteMessage(Long messageId) {
         messageRepository.deleteById(messageId);
+    }
+
+    // M6: Kiểm tra quyền sở hữu tin nhắn
+    public boolean isMessageOwner(Long messageId, String username) {
+        ChatMessage entity = messageRepository.findById(messageId).orElse(null);
+        return entity != null && username.equals(entity.getSender());
     }
 }

@@ -1,7 +1,7 @@
 package com.chatsever.messaging.handler;
 
 import com.chatsever.common.dto.MessageDTO;
-import com.chatsever.common.dto.LogEntry;
+
 import com.chatsever.common.enums.MessageType;
 import com.chatsever.messaging.service.MessageService;
 import com.chatsever.messaging.entity.ChatMessage;
@@ -20,15 +20,17 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
+@SuppressWarnings("null")
 public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final MessageService messageService;
     private final RestTemplate restTemplate;
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
-    @Value("${services.auth-url}") private String authUrl;
+    private final String authUrl;
 
-    public ChatWebSocketHandler(MessageService messageService, RestTemplate restTemplate) {
+    public ChatWebSocketHandler(MessageService messageService, RestTemplate restTemplate, @Value("${services.auth-url}") String authUrl) {
         this.messageService = messageService;
         this.restTemplate = restTemplate;
+        this.authUrl = authUrl;
     }
 
     @Override
@@ -42,7 +44,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                sessions.put(username, session);
                session.getAttributes().put("username", username);
                messageService.notifyPresence(username, "connect");
-               messageService.broadcast(new MessageDTO(MessageType.JOIN, "SERVER", null, username + " đã vào!", LocalDateTime.now()), sessions);
+               messageService.broadcastToChannel(new MessageDTO(MessageType.JOIN, "SERVER", null, username + " đã vào!", LocalDateTime.now()), sessions);
            }
        } catch (Exception e) {
            session.close(new CloseStatus(4001, "Xác thực thất bại: " + e.getMessage()));
@@ -67,24 +69,40 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         switch (msg.getType()) {
             case CHAT -> {
                 ChatMessage saved = messageService.saveMessage(msg);
-                msg.setMessageId(saved.getId()); // Cập nhật ID cho client biết
-                messageService.broadcast(msg, sessions);
+                msg.setMessageId(saved.getId());
+                messageService.broadcastToChannel(msg, sessions);
+                // Publish notification event cho notification-service (N1, N2, N5)
+                messageService.publishNotificationEvent(msg);
             }
             case EDIT -> {
                 if (msg.getMessageId() != null) {
+                    // M6: Kiểm tra người sửa có phải người gửi gốc không
+                    if (!messageService.isMessageOwner(msg.getMessageId(), sender)) {
+                        messageService.sendError(session, "Chỉ người gửi mới có thể sửa tin nhắn");
+                        return;
+                    }
                     messageService.updateMessage(msg.getMessageId(), msg.getContent());
                     msg.setIsEdited(true);
-                    messageService.broadcast(msg, sessions);
+                    messageService.broadcastToChannel(msg, sessions);
                 }
             }
             case DELETE -> {
                 if (msg.getMessageId() != null) {
+                    // M7: Người gửi hoặc Admin có thể xóa (Admin check cần Role Service)
+                    if (!messageService.isMessageOwner(msg.getMessageId(), sender)) {
+                        messageService.sendError(session, "Không có quyền xóa tin nhắn này");
+                        return;
+                    }
                     messageService.deleteMessage(msg.getMessageId());
-                    messageService.broadcast(msg, sessions);
+                    messageService.broadcastToChannel(msg, sessions);
                 }
             }
-            case TYPING -> messageService.broadcast(msg, sessions);
-            case PRIVATE -> messageService.sendPrivate(msg, session, sessions);
+            case TYPING -> messageService.broadcastToChannel(msg, sessions);
+            case PRIVATE -> {
+                messageService.sendPrivate(msg, session, sessions);
+                // Publish DM notification
+                messageService.publishNotificationEvent(msg);
+            }
             case PING -> session.sendMessage(new TextMessage("{\"type\":\"PONG\"}"));
             default -> {}
         }
@@ -101,11 +119,12 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         if (username != null) {
             sessions.remove(username);
             messageService.notifyPresence(username, "disconnect");
-            messageService.broadcast(new MessageDTO(MessageType.LEAVE, "SERVER", null, username + " rời đi!", LocalDateTime.now()), sessions);
+            messageService.broadcastToChannel(new MessageDTO(MessageType.LEAVE, "SERVER", null, username + " rời đi!", LocalDateTime.now()), sessions);
         }
     }
 
     private String extractToken(WebSocketSession session) {
+        if (session.getUri() == null) return "";
         String query = session.getUri().getQuery();
         return (query != null && query.startsWith("token=")) ? query.substring(6) : "";
     }

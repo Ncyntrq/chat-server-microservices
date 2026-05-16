@@ -18,4 +18,13 @@ public class Channel {
 
     @Enumerated(EnumType.STRING)
     private ChannelType type;
+
+    // CH3: topic, slowmode
+    private String topic;
+
+    @Column(columnDefinition = "INT DEFAULT 0")
+    private Integer slowmode; // seconds between messages (0 = off)
+
+    // CH5: category grouping
+    private String category;
 }

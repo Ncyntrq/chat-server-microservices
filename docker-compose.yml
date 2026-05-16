@@ -1,12 +1,21 @@
 version: '3.8'
 
 services:
-  # --- HẠ TẦNG CỐT LÕI (INFRASTRUCTURE) ---
+  # =========================================================
+  # HẠ TẦNG CỐT LÕI (INFRASTRUCTURE)
+  # =========================================================
   rabbitmq:
     image: rabbitmq:3-management
     ports:
       - "5672:5672"
       - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
     networks:
       - chat-net
 
@@ -15,8 +24,16 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: chat_server_db
+      MYSQL_ROOT_HOST: '%'
     ports:
       - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 20s
+      retries: 10
     networks:
       - chat-net
 
@@ -29,17 +46,27 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: [ "CMD", "mc", "ready", "local" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
     networks:
       - chat-net
 
-  # --- MICROSERVICES ---
+  # =========================================================
+  # API GATEWAY
+  # =========================================================
   gateway-service:
     build:
       context: .
       dockerfile: gateway-service/Dockerfile
     ports:
-      - "8080:8080" # Cánh cửa chính của toàn hệ thống
+      - "8080:8080"
     environment:
+      - JWT_SECRET=chatsever-jwt-secret-key-2026-safe-key
       - AUTH_SERVICE_URL=http://auth-service:8081
       - SERVER_SERVICE_URL=http://server-service:8085
       - CHANNEL_SERVICE_URL=http://channel-service:8086
@@ -47,123 +74,41 @@ services:
       - MESSAGING_WS_URL=ws://messaging-service:8082
       - PRESENCE_SERVICE_URL=http://presence-service:8083
       - FILE_SERVICE_URL=http://file-service:8089
-      - LOG_SERVICE_URL=http://log-service:8087
+      - LOG_SERVICE_URL=http://log-service:8084
       - NOTIFICATION_SERVICE_URL=http://notification-service:8088
+      - ROLE_SERVICE_URL=http://role-service:8090
+      - USER_PROFILE_URL=http://user-profile-service:8091
     depends_on:
-      - auth-service
-      - messaging-service
+      auth-service:
+        condition: service_started
+      messaging-service:
+        condition: service_started
     networks:
       - chat-net
 
+  # =========================================================
+  # CÁC MICROSERVICES
+  # =========================================================
+
+  # --- Auth Service (A1-A6) - DB riêng: chat_auth_db ---
   auth-service:
     build:
       context: .
       dockerfile: auth-service/Dockerfile
     networks:
       - chat-net
-    depends_on:
-      - mysql-db
-
-  # server-service: chưa có code/Dockerfile — bỏ comment khi sẵn sàng
-  # server-service:
-  #   build:
-  #     context: .
-  #     dockerfile: server-service/Dockerfile
-  #   networks:
-  #     - chat-net
-  #   environment:
-  #     - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/chat_server_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
-  #     - SPRING_DATASOURCE_USERNAME=root
-  #     - SPRING_DATASOURCE_PASSWORD=root
-  #     - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.MySQL8Dialect
-  #     - CHANNEL_SERVICE_URL=http://channel-service:8086
-  #   depends_on:
-  #     - mysql-db
-  #     - channel-service
-
-  # channel-service: chưa có code/Dockerfile — bỏ comment khi sẵn sàng
-  # channel-service:
-  #   build:
-  #     context: .
-  #     dockerfile: channel-service/Dockerfile
-  #   networks:
-  #     - chat-net
-  #   environment:
-  #     - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/chat_channel_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
-  #     - SPRING_DATASOURCE_USERNAME=root
-  #     - SPRING_DATASOURCE_PASSWORD=root
-  #     - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.MySQL8Dialect
-  #     - MYSQL_HOST=mysql-db
-  #     - MYSQL_PASSWORD=root
-  #   depends_on:
-  #     - mysql-db
-
-  messaging-service:
-    build:
-      context: .
-      dockerfile: messaging-service/Dockerfile
-    networks:
-      - chat-net
-    depends_on:
-      - rabbitmq
-
-  presence-service:
-    build:
-      context: .
-      dockerfile: presence-service/Dockerfile
-    networks:
-      - chat-net
     environment:
-      - MYSQL_HOST=mysql-db
-      - MYSQL_PASSWORD=root
+      - JWT_SECRET=chatsever-jwt-secret-key-2026-safe-key
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/chat_auth_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
+      - SPRING_DATASOURCE_DRIVER=com.mysql.cj.jdbc.Driver
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_JPA_DDL_AUTO=update
     depends_on:
-      - mysql-db
+      mysql-db:
+        condition: service_healthy
 
-  log-service:
-    build:
-      context: .
-      dockerfile: log-service/Dockerfile
-    networks:
-      - chat-net
-    depends_on:
-      - rabbitmq
-
-  notification-service:
-    build:
-      context: .
-      dockerfile: notification-service/Dockerfile
-    ports:
-      - "8088:8088"
-    environment:
-      - SPRING_RABBITMQ_HOST=rabbitmq
-      - SPRING_RABBITMQ_PORT=5672
-      - SPRING_RABBITMQ_USERNAME=guest
-      - SPRING_RABBITMQ_PASSWORD=guest
-    depends_on:
-      - rabbitmq
-    networks:
-      - chat-net
-
-  file-service:
-    build:
-      context: .
-      dockerfile: file-service/Dockerfile
-    ports:
-      - "8089:8089"
-    environment:
-      - MINIO_ENDPOINT=http://minio:9000
-      - MINIO_ACCESS_KEY=admin
-      - MINIO_SECRET_KEY=password123
-    depends_on:
-      - minio
-    build:
-      context: .
-      dockerfile: auth-service/Dockerfile
-    networks:
-      - chat-net
-    depends_on:
-      - mysql-db
-
+  # --- Server Service (SV1-SV8) - DB riêng: chat_server_db ---
   server-service:
     build:
       context: .
@@ -177,9 +122,12 @@ services:
       - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.MySQL8Dialect
       - CHANNEL_SERVICE_URL=http://channel-service:8086
     depends_on:
-      - mysql-db
-      - channel-service
+      mysql-db:
+        condition: service_healthy
+      channel-service:
+        condition: service_started
 
+  # --- Channel Service (CH1-CH7) - DB riêng: chat_channel_db ---
   channel-service:
     build:
       context: .
@@ -190,21 +138,32 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/chat_channel_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
       - SPRING_DATASOURCE_USERNAME=root
       - SPRING_DATASOURCE_PASSWORD=root
-      - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.MySQL8Dialect
-      - MYSQL_HOST=mysql-db
-      - MYSQL_PASSWORD=root
     depends_on:
-      - mysql-db
+      mysql-db:
+        condition: service_healthy
 
+  # --- Messaging Service (M1-M10) - DB riêng: chat_messaging_db ---
   messaging-service:
     build:
       context: .
       dockerfile: messaging-service/Dockerfile
     networks:
       - chat-net
+    environment:
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/chat_messaging_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - AUTH_SERVICE_URL=http://auth-service:8081
+      - PRESENCE_SERVICE_URL=http://presence-service:8083
+      - SERVER_SERVICE_URL=http://server-service:8085
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+      mysql-db:
+        condition: service_healthy
 
+  # --- Presence Service (P1-P5) - DB riêng: chat_presence_db ---
   presence-service:
     build:
       context: .
@@ -212,20 +171,107 @@ services:
     networks:
       - chat-net
     environment:
-      - MYSQL_HOST=mysql-db
-      - MYSQL_PASSWORD=root
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/chat_presence_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
     depends_on:
-      - mysql-db
+      mysql-db:
+        condition: service_healthy
 
+  # --- Log Service (L1-L3) ---
   log-service:
     build:
       context: .
       dockerfile: log-service/Dockerfile
     networks:
       - chat-net
+    environment:
+      - SPRING_RABBITMQ_HOST=rabbitmq
+    volumes:
+      - log-data:/app/logs
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+
+  # --- Notification Service (N1-N5) - DB riêng: chat_notification_db ---
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    environment:
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/chat_notification_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
+      - SPRING_DATASOURCE_DRIVER=com.mysql.cj.jdbc.Driver
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_JPA_DDL_AUTO=update
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mysql-db:
+        condition: service_healthy
+    networks:
+      - chat-net
+
+  # --- File Service (F1-F4) - DB riêng: chat_file_db ---
+  file-service:
+    build:
+      context: .
+      dockerfile: file-service/Dockerfile
+    environment:
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=password123
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/chat_file_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
+      - SPRING_DATASOURCE_DRIVER=com.mysql.cj.jdbc.Driver
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_JPA_DDL_AUTO=update
+    depends_on:
+      minio:
+        condition: service_healthy
+      mysql-db:
+        condition: service_healthy
+    networks:
+      - chat-net
+  # --- (Có thể bỏ comment khi làm xong) ---
+  # role-service:
+  #   build:
+  #     context: .
+  #     dockerfile: role-service/Dockerfile
+  #   networks:
+  #     - chat-net
+  #   environment:
+  #     - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/chat_role_db?createDatabaseIfNotExist=true&useSSL=false
+  #     - SPRING_DATASOURCE_USERNAME=root
+  #     - SPRING_DATASOURCE_PASSWORD=root
+  #   depends_on:
+  #     mysql-db:
+  #       condition: service_healthy
+  #
+  # user-profile-service:
+  #   build:
+  #     context: .
+  #     dockerfile: user-profile-service/Dockerfile
+  #   networks:
+  #     - chat-net
+  #   environment:
+  #     - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/chat_profile_db?createDatabaseIfNotExist=true&useSSL=false
+  #     - SPRING_DATASOURCE_USERNAME=root
+  #     - SPRING_DATASOURCE_PASSWORD=root
+  #   depends_on:
+  #     mysql-db:
+  #       condition: service_healthy
 
 networks:
   chat-net:
     driver: bridge
+
+volumes:
+  mysql-data: # Dữ liệu MySQL (users, servers, channels, messages)
+  minio-data: # File uploads (avatars, đính kèm)
+  rabbitmq-data: # RabbitMQ queue state & config
+  log-data: # Log files (audit trail)

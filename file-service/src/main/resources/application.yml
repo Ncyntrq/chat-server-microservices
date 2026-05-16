@@ -7,13 +7,15 @@ server:
 spring:
   application:
     name: file-service
-  # --- Cấu hình Database (H2 in-memory cho dev, production đổi sang MySQL) ---
+  # --- Cấu hình Database (H2 in-memory cho dev, MySQL cho Docker/production) ---
   datasource:
-    url: jdbc:h2:mem:filedb
-    driver-class-name: org.h2.Driver
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:mem:filedb}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER:org.h2.Driver}
+    username: ${SPRING_DATASOURCE_USERNAME:sa}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
   jpa:
     hibernate:
-      ddl-auto: create-drop           # Tự tạo/xóa bảng mỗi lần khởi động (chỉ dùng cho dev)
+      ddl-auto: ${SPRING_JPA_DDL_AUTO:create-drop}           # Dev: create-drop | Docker: update
     show-sql: true                     # In câu SQL ra console để debug
   h2:
     console:

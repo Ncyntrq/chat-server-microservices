@@ -1,35 +1,28 @@
 # syntax=docker/dockerfile:1.6
-FROM eclipse-temurin:17-jdk-jammy AS build
+FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /build
 
-COPY mvnw mvnw.cmd pom.xml ./
-COPY .mvn .mvn
-RUN chmod +x mvnw && sed -i 's/\r$//' mvnw
+COPY pom.xml ./
+COPY common-lib/pom.xml common-lib/pom.xml
+COPY auth-service/pom.xml auth-service/pom.xml
+COPY server-service/pom.xml server-service/pom.xml
+COPY channel-service/pom.xml channel-service/pom.xml
+COPY messaging-service/pom.xml messaging-service/pom.xml
+COPY presence-service/pom.xml presence-service/pom.xml
+COPY log-service/pom.xml log-service/pom.xml
+COPY gateway-service/pom.xml gateway-service/pom.xml
+COPY notification-service/pom.xml notification-service/pom.xml
+COPY file-service/pom.xml file-service/pom.xml
 
-# COPY đầy đủ các module để không bị lỗi thiếu dependencies
-COPY common-lib common-lib
-COPY auth-service auth-service
-COPY gateway-service gateway-service
-COPY log-service log-service
-COPY messaging-service messaging-service
-COPY presence-service presence-service
-COPY server-service server-service
-COPY channel-service channel-service
+RUN mvn dependency:go-offline -pl gateway-service -am -q || true
 
-# --- SỬA TÊN MODULE TẠI ĐÂY ---
-RUN ./mvnw -pl gateway-service -am clean package -DskipTests
+COPY . .
+RUN mvn -pl gateway-service -am clean package -DskipTests -q
 
-# Runtime stage
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
-
-# --- SỬA TÊN MODULE TẠI ĐÂY ---
 COPY --from=build /build/gateway-service/target/gateway-service-1.0.0-SNAPSHOT.jar app.jar
 
 ENV TZ=Asia/Ho_Chi_Minh
-
-# --- SỬA PORT TƯƠNG ỨNG TẠI ĐÂY ---
-# Gateway: 8080 | Auth: 8081 | Messaging: 8082 | Presence: 8083 | Log: 8084
 EXPOSE 8080
-
 ENTRYPOINT ["sh","-c","java $JAVA_OPTS -jar /app/app.jar"]
