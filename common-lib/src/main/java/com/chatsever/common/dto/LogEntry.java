@@ -18,6 +18,8 @@ public class LogEntry {
     private String sender;     // Người gửi (null nếu system event)
     private String receiver;   // Người nhận (null nếu broadcast)
     private String content;    // Nội dung tin nhắn / mô tả event
+    private Long channelId;    // ID channel nguồn (null nếu không liên quan)
+    private Long serverId;     // ID server nguồn (null nếu không liên quan)
 
     // Constructor mặc định — Jackson cần để deserialize
     public LogEntry() {}
@@ -28,6 +30,13 @@ public class LogEntry {
         this.sender = sender;
         this.receiver = receiver;
         this.content = content;
+    }
+
+    public LogEntry(LocalDateTime timestamp, String eventType, String sender, String receiver,
+                    String content, Long channelId, Long serverId) {
+        this(timestamp, eventType, sender, receiver, content);
+        this.channelId = channelId;
+        this.serverId = serverId;
     }
 
     // --- Getter & Setter ---
@@ -46,4 +55,10 @@ public class LogEntry {
 
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
+
+    public Long getChannelId() { return channelId; }
+    public void setChannelId(Long channelId) { this.channelId = channelId; }
+
+    public Long getServerId() { return serverId; }
+    public void setServerId(Long serverId) { this.serverId = serverId; }
 }

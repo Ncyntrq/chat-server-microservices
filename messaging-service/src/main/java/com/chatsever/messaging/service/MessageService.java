@@ -122,7 +122,9 @@ public class MessageService {
 
     // Bắn Log sang RabbitMQ
     public void publishLogEvent(MessageDTO msg) {
-        LogEntry log = new LogEntry(msg.getTimestamp(), msg.getType().name(), msg.getSender(), msg.getReceiver(), msg.getContent());
+        LogEntry log = new LogEntry(msg.getTimestamp(), msg.getType().name(),
+                msg.getSender(), msg.getReceiver(), msg.getContent(),
+                msg.getChannelId(), msg.getServerId());
         rabbitTemplate.convertAndSend("chat.exchange", "log." + msg.getType().name().toLowerCase(), log);
     }
 
