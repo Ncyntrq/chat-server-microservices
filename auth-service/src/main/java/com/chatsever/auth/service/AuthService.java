@@ -20,7 +20,6 @@ import java.util.Date;
 import java.util.UUID;
 
 @Service
-@SuppressWarnings("null")
 public class AuthService {
 
     private final UserRepository userRepository;

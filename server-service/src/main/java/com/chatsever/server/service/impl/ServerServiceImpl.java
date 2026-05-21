@@ -20,7 +20,6 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-@SuppressWarnings("null")
 public class ServerServiceImpl implements ServerService {
     private final ServerRepository serverRepository;
     private final MemberRepository memberRepository;
