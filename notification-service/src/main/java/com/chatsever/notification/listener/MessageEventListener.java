@@ -37,11 +37,13 @@ public class MessageEventListener {
      */
     @RabbitListener(queues = RabbitMQConfig.QUEUE)
     public void onMessage(MessageDTO message) {
-        log.info("Nhận message event: sender={}, content={}",
-                message.getSender(), message.getContent());
+        log.info("Nhận message event: sender={}, channelId={}, serverId={}, content={}",
+                message.getSender(), message.getChannelId(), message.getServerId(), message.getContent());
 
         String content = message.getContent();
         String sender = message.getSender();
+        Long channelId = message.getChannelId();
+        Long serverId = message.getServerId();
 
         if (content == null || sender == null) {
             log.warn("Message event thiếu content hoặc sender, bỏ qua");
@@ -57,13 +59,13 @@ public class MessageEventListener {
         if (mentions.contains("everyone")) {
             notificationService.createNotification(
                     "ALL",          // userId = ALL (broadcast)
-                    null,           // channelId — cần bổ sung khi MessageDTO có channelId
-                    null,           // serverId
+                    channelId,
+                    serverId,
                     sender,
                     NotificationType.MENTION_ALL,
                     content
             );
-            log.info("Tạo MENTION_ALL notification từ sender={}", sender);
+            log.info("Tạo MENTION_ALL notification từ sender={} channel={}", sender, channelId);
         }
 
         // 3. Nếu có @user cụ thể → tạo notification cho từng user
@@ -71,13 +73,13 @@ public class MessageEventListener {
             if (!"everyone".equals(mentionedUser) && !mentionedUser.equals(sender)) {
                 notificationService.createNotification(
                         mentionedUser,
-                        null,       // channelId
-                        null,       // serverId
+                        channelId,
+                        serverId,
                         sender,
                         NotificationType.MENTION,
                         content
                 );
-                log.info("Tạo MENTION notification cho user={} từ sender={}", mentionedUser, sender);
+                log.info("Tạo MENTION notification cho user={} từ sender={} channel={}", mentionedUser, sender, channelId);
             }
         }
 
@@ -85,8 +87,8 @@ public class MessageEventListener {
         if (message.getReceiver() != null && !message.getReceiver().isEmpty()) {
             notificationService.createNotification(
                     message.getReceiver(),
-                    null,
-                    null,
+                    channelId,
+                    serverId,
                     sender,
                     NotificationType.DM,
                     content
