@@ -19,6 +19,8 @@
         <module>channel-service</module>
         <module>notification-service</module>
         <module>file-service</module>
+        <module>user-profile-service</module>
+        <module>role-service</module>
     </modules>
 
     <properties>

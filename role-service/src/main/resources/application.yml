@@ -1,0 +1,15 @@
+server:
+  port: 8091
+
+spring:
+  application:
+    name: role-service
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:3307/chat_role_db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+    username: root
+    password: root
+  jpa:
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
