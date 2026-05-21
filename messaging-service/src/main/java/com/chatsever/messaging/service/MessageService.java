@@ -24,7 +24,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
-@SuppressWarnings("null")
 public class MessageService {
     private static final Logger logger = LoggerFactory.getLogger(MessageService.class);
     private final RestTemplate restTemplate;

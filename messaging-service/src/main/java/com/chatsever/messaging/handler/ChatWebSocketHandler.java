@@ -20,7 +20,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
-@SuppressWarnings("null")
 public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final MessageService messageService;
     private final RestTemplate restTemplate;
