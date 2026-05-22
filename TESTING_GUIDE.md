@@ -82,7 +82,7 @@ Mọi request API từ client nên đi qua **API Gateway** (thường chạy ở
 - Dán chuỗi `accessToken` vào ô Token.
 
 **Ví dụ: Tạo một Server mới (Server Service)**
-- **Method:** POSTp
+- **Method:** POST
 - **URL:** `http://localhost:8080/api/servers`
 - **Body (JSON):**
   ```json
