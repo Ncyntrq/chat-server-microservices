@@ -1,0 +1,9 @@
+**/target/
+**/*.jar
+**/*.war
+.git/
+.gitignore
+.idea/
+*.iml
+.vscode/
+.env
