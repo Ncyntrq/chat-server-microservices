@@ -45,3 +45,9 @@ Thumbs.db
 
 # Docker — runtime override (không commit env riêng)
 docker-compose.override.yml
+
+# Secrets — KHÔNG BAO GIỜ commit file .env thực
+.env
+
+# Jenkins/Newman test reports
+reports/
