@@ -43,4 +43,11 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info           # Chỉ mở health và info
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  prometheus:
+    metrics:
+      export:
+        enabled: true
