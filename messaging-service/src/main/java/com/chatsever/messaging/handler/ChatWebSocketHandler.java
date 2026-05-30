@@ -6,6 +6,8 @@ import com.chatsever.common.enums.MessageType;
 import com.chatsever.messaging.service.MessageService;
 import com.chatsever.messaging.entity.ChatMessage;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
@@ -25,11 +27,16 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final RestTemplate restTemplate;
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
     private final String authUrl;
+    private final ObjectMapper objectMapper;
+
 
     public ChatWebSocketHandler(MessageService messageService, RestTemplate restTemplate, @Value("${services.auth-url}") String authUrl) {
         this.messageService = messageService;
         this.restTemplate = restTemplate;
         this.authUrl = authUrl;
+        this.objectMapper = new ObjectMapper();
+        this.objectMapper.registerModule(new JavaTimeModule());
+        this.objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 
     @Override
@@ -52,7 +59,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        MessageDTO msg = new ObjectMapper().readValue(message.getPayload(), MessageDTO.class);
+        MessageDTO msg = objectMapper.readValue(message.getPayload(), MessageDTO.class);
         msg.setTimestamp(LocalDateTime.now());
         String sender = (String) session.getAttributes().get("username");
         msg.setSender(sender);

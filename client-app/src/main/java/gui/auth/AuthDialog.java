@@ -4,6 +4,9 @@ import javax.swing.*;
 import java.awt.geom.RoundRectangle2D;
 
 public class AuthDialog extends JDialog {
+
+    private final JTabbedPane tabbedPane;
+
     public AuthDialog() {
         setUndecorated(true);
         setTitle("Authentication");
@@ -13,10 +16,20 @@ public class AuthDialog extends JDialog {
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setShape(new RoundRectangle2D.Double(0, 0, getWidth(), getHeight(), 20, 20));
 
-        JTabbedPane tabbedPane = new JTabbedPane();
-        tabbedPane.addTab("Login", new LoginPanel());
-        tabbedPane.addTab("Register", new RegisterPanel());
+        tabbedPane = new JTabbedPane();
+        tabbedPane.addTab("Login", new LoginPanel(this));
+        tabbedPane.addTab("Register", new RegisterPanel(this));
 
         add(tabbedPane);
+    }
+
+    /** Chuyển sang tab Login (index 0). */
+    public void showLoginTab() {
+        tabbedPane.setSelectedIndex(0);
+    }
+
+    /** Chuyển sang tab Register (index 1). */
+    public void showRegisterTab() {
+        tabbedPane.setSelectedIndex(1);
     }
 }
