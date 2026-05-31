@@ -73,11 +73,31 @@ public class ProfileEditPanel extends JPanel {
             JFileChooser fc = new JFileChooser();
             fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Ảnh (JPEG, PNG)", "jpg", "jpeg", "png"));
             if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                java.io.File selected = fc.getSelectedFile();
                 statusLabel.setForeground(AppColors.TEXT_MUTED);
                 statusLabel.setText("Đang upload avatar...");
-                // TODO: Implement multipart upload khi cần
-                statusLabel.setForeground(AppColors.WARNING);
-                statusLabel.setText("Chức năng upload avatar sẽ được hoàn thiện sau");
+
+                new SwingWorker<Map<String, Object>, Void>() {
+                    @Override
+                    protected Map<String, Object> doInBackground() {
+                        return profileApi.uploadAvatar(selected);
+                    }
+
+                    @Override
+                    protected void done() {
+                        try {
+                            Map<String, Object> profile = get();
+                            Object avatarUrl = profile.get("avatarUrl");
+                            statusLabel.setForeground(AppColors.SUCCESS);
+                            statusLabel.setText("Đã upload avatar"
+                                    + (avatarUrl != null ? ": " + avatarUrl : "!"));
+                        } catch (Exception ex) {
+                            Throwable cause = ex.getCause() instanceof ApiException ? ex.getCause() : ex;
+                            statusLabel.setForeground(AppColors.DANGER);
+                            statusLabel.setText("Lỗi: " + cause.getMessage());
+                        }
+                    }
+                }.execute();
             }
         });
         avatarBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
