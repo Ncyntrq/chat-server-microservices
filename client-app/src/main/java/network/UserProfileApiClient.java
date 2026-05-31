@@ -43,6 +43,36 @@ public class UserProfileApiClient {
         return putJson("/api/users/status", body);
     }
 
+    // UP3 — Upload avatar (multipart/form-data, max 2MB, JPEG/PNG)
+    public Map<String, Object> uploadAvatar(java.io.File file) {
+        String token = SessionManager.get().getAccessToken();
+        if (token == null) throw new ApiException("Chưa đăng nhập — không có token");
+        if (file == null || !file.isFile()) throw new ApiException("File avatar không hợp lệ");
+        if (file.length() > 2 * 1024 * 1024) throw new ApiException("Avatar vượt quá 2MB");
+
+        String url = ApiConfig.GATEWAY_HTTP + "/api/users/avatar";
+        String boundary = "----ChatSeverBoundary" + Long.toHexString(System.nanoTime());
+        try {
+            byte[] body = buildAvatarMultipart(file, boundary);
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(30))
+                    .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                    .header("Authorization", "Bearer " + token)
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(body))
+                    .build();
+            HttpResponse<String> resp = HttpClientHolder.get().send(req, HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() / 100 != 2) {
+                throw new ApiException(resp.statusCode(), parseError(resp.body()));
+            }
+            return json.readValue(resp.body(), new TypeReference<Map<String, Object>>() {});
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ApiException("Lỗi upload avatar: " + e.getMessage(), e);
+        }
+    }
+
     // UP5 — Tìm kiếm user
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> searchUsers(String keyword) {
@@ -58,6 +88,22 @@ public class UserProfileApiClient {
     // ---------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------
+
+    /** Dựng body multipart/form-data với 1 part tên "file" theo đúng contract backend. */
+    private byte[] buildAvatarMultipart(java.io.File file, String boundary) throws java.io.IOException {
+        String filename = file.getName();
+        String contentType = filename.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
+        byte[] fileBytes = java.nio.file.Files.readAllBytes(file.toPath());
+
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        String header = "--" + boundary + "\r\n"
+                + "Content-Disposition: form-data; name=\"file\"; filename=\"" + filename + "\"\r\n"
+                + "Content-Type: " + contentType + "\r\n\r\n";
+        out.write(header.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        out.write(fileBytes);
+        out.write(("\r\n--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return out.toByteArray();
+    }
 
     private Map<String, Object> putJson(String path, Object body) {
         String url = ApiConfig.GATEWAY_HTTP + path;
