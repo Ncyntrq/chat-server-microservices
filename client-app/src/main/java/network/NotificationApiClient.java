@@ -13,14 +13,14 @@ public class NotificationApiClient {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(ApiConfig.GATEWAY_HTTP + "/api/notifications/unread-count?userId=" + userId))
                     .GET()
-                    .header("Authorization", "Bearer " + SessionManager.getToken())
+                    .header("Authorization", "Bearer " + SessionManager.get().getAccessToken())
                     .build();
 
-            HttpResponse<String> response = HttpClientHolder.getClient()
+            HttpResponse<String> response = HttpClientHolder.get()
                     .send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() == 200) {
-                return JsonMapper.fromJson(response.body(), Map.class);
+                return JsonMapper.get().readValue(response.body(), Map.class);
             } else {
                 throw new ApiException(response.statusCode(), "Failed to get unread counts");
             }
@@ -34,9 +34,9 @@ public class NotificationApiClient {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(ApiConfig.GATEWAY_HTTP + "/api/notifications/ack-channel/" + channelId + "?userId=" + userId))
                     .POST(HttpRequest.BodyPublishers.noBody())
-                    .header("Authorization", "Bearer " + SessionManager.getToken())
+                    .header("Authorization", "Bearer " + SessionManager.get().getAccessToken())
                     .build();
-            HttpClientHolder.getClient().send(request, HttpResponse.BodyHandlers.discarding());
+            HttpClientHolder.get().send(request, HttpResponse.BodyHandlers.discarding());
         } catch (Exception ignored) {
         }
     }
@@ -46,9 +46,9 @@ public class NotificationApiClient {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(ApiConfig.GATEWAY_HTTP + "/api/notifications/ack-dm/" + senderUsername + "?userId=" + userId))
                     .POST(HttpRequest.BodyPublishers.noBody())
-                    .header("Authorization", "Bearer " + SessionManager.getToken())
+                    .header("Authorization", "Bearer " + SessionManager.get().getAccessToken())
                     .build();
-            HttpClientHolder.getClient().send(request, HttpResponse.BodyHandlers.discarding());
+            HttpClientHolder.get().send(request, HttpResponse.BodyHandlers.discarding());
         } catch (Exception ignored) {
         }
     }
