@@ -106,13 +106,16 @@ public class MessageService {
 
     // Gửi tin nhắn riêng (Private)
     public void sendPrivate(MessageDTO msg, WebSocketSession senderSession, Map<String, WebSocketSession> sessions) throws Exception {
+        String payload = objectMapper.writeValueAsString(msg);
+        
         WebSocketSession receiver = sessions.get(msg.getReceiver());
         if (receiver != null && receiver.isOpen()) {
-            String payload = objectMapper.writeValueAsString(msg);
             receiver.sendMessage(new TextMessage(payload));
-            senderSession.sendMessage(new TextMessage(payload)); // Xác nhận cho người gửi
-        } else {
-            sendError(senderSession, "User " + msg.getReceiver() + " không online!");
+        } 
+        
+        // Luôn echo lại cho người gửi để hiển thị trên màn hình của họ
+        if (senderSession != null && senderSession.isOpen()) {
+            senderSession.sendMessage(new TextMessage(payload));
         }
     }
 

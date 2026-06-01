@@ -1,12 +1,19 @@
 package gui.auth;
 
 import javax.swing.*;
+import java.awt.CardLayout;
 import java.awt.Window;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Cursor;
+import java.awt.FlowLayout;
+import java.awt.Font;
 import java.awt.geom.RoundRectangle2D;
 
 public class AuthDialog extends JDialog {
 
-    private final JTabbedPane tabbedPane;
+    private final JPanel cards;
+    private final CardLayout cardLayout;
 
     public AuthDialog() {
         this((Window) null);
@@ -22,20 +29,50 @@ public class AuthDialog extends JDialog {
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setShape(new RoundRectangle2D.Double(0, 0, getWidth(), getHeight(), 20, 20));
 
-        tabbedPane = new JTabbedPane();
-        tabbedPane.addTab("Login", new LoginPanel(this));
-        tabbedPane.addTab("Register", new RegisterPanel(this));
+        // Header containing close button
+        JPanel header = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 10));
+        header.setBackground(Color.decode("#313338"));
+        
+        JButton closeBtn = new JButton("✕");
+        closeBtn.setFont(new Font("SansSerif", Font.BOLD, 18));
+        closeBtn.setForeground(Color.decode("#80848E"));
+        closeBtn.setFocusPainted(false);
+        closeBtn.setContentAreaFilled(false);
+        closeBtn.setBorderPainted(false);
+        closeBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        closeBtn.addActionListener(e -> dispose());
+        
+        closeBtn.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                closeBtn.setForeground(Color.WHITE);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                closeBtn.setForeground(Color.decode("#80848E"));
+            }
+        });
+        
+        header.add(closeBtn);
 
-        add(tabbedPane);
+        cardLayout = new CardLayout();
+        cards = new JPanel(cardLayout);
+        cards.add(new LoginPanel(this), "Login");
+        cards.add(new RegisterPanel(this), "Register");
+
+        JPanel root = new JPanel(new BorderLayout());
+        root.setBackground(Color.decode("#313338"));
+        root.add(header, BorderLayout.NORTH);
+        root.add(cards, BorderLayout.CENTER);
+
+        setContentPane(root);
     }
 
-    /** Chuyển sang tab Login (index 0). */
+    /** Chuyển sang panel Login. */
     public void showLoginTab() {
-        tabbedPane.setSelectedIndex(0);
+        cardLayout.show(cards, "Login");
     }
 
-    /** Chuyển sang tab Register (index 1). */
+    /** Chuyển sang panel Register. */
     public void showRegisterTab() {
-        tabbedPane.setSelectedIndex(1);
+        cardLayout.show(cards, "Register");
     }
 }

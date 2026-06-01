@@ -45,6 +45,7 @@ public class ChatClientGUI extends JFrame {
     private final ServerApiClient serverApi = new ServerApiClient();
     private final PrivateMessageApiClient privateMessageApi = new PrivateMessageApiClient();
     private final FileApiClient fileApi = new FileApiClient();
+    private final network.NotificationApiClient notificationApi = new network.NotificationApiClient();
 
     private final ServerSidebar serverSidebar = new ServerSidebar();
     private final ChannelSidebar channelSidebar;
@@ -61,6 +62,7 @@ public class ChatClientGUI extends JFrame {
     private long activeServerId = -1;
     private long activeChannelId = -1;
     private String activePrivateUser = null;
+    private String lastSender = null;
 
     // Theo dõi item theo messageId để cập nhật/xóa tại chỗ khi nhận EDIT/DELETE
     private final Map<Long, ChatMessageItem> messageItems = new LinkedHashMap<>();
@@ -215,6 +217,63 @@ public class ChatClientGUI extends JFrame {
         serverSidebar.loadServers();
         onServerSelected(-1, null); // Gọi trực tiếp hàm xử lý logic Trang chủ
         connectWebSocket();
+        refreshUnreadCounts();
+    }
+
+    private void refreshUnreadCounts() {
+        new SwingWorker<java.util.Map<String, Object>, Void>() {
+            @Override
+            protected java.util.Map<String, Object> doInBackground() {
+                try {
+                    return notificationApi.getUnreadCounts(sessionUsername);
+                } catch (Exception e) {
+                    return null;
+                }
+            }
+            @Override
+            @SuppressWarnings("unchecked")
+            protected void done() {
+                try {
+                    java.util.Map<String, Object> resp = get();
+                    if (resp == null) return;
+                    
+                    if (resp.get("unreadCounts") != null) {
+                        java.util.Map<String, Number> unreadMap = (java.util.Map<String, Number>) resp.get("unreadCounts");
+                        java.util.Map<Long, Integer> channelCounts = new java.util.HashMap<>();
+                        for (java.util.Map.Entry<String, Number> entry : unreadMap.entrySet()) {
+                            channelCounts.put(Long.parseLong(entry.getKey()), entry.getValue().intValue());
+                        }
+                        channelSidebar.updateUnreadCounts(channelCounts);
+                    }
+                    
+                    if (resp.get("privateCounts") != null) {
+                        java.util.Map<String, Number> privateMap = (java.util.Map<String, Number>) resp.get("privateCounts");
+                        java.util.Map<String, Integer> friendCounts = new java.util.HashMap<>();
+                        for (java.util.Map.Entry<String, Number> entry : privateMap.entrySet()) {
+                            friendCounts.put(entry.getKey(), entry.getValue().intValue());
+                        }
+                        friendSidebar.updateUnreadCounts(friendCounts);
+                    }
+                } catch (Exception ignore) {
+                    if (ignore instanceof InterruptedException) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+        }.execute();
+    }
+
+    private void ackMessage(MessageDTO msg) {
+        new SwingWorker<Void, Void>() {
+            @Override protected Void doInBackground() {
+                if (msg.getType() == MessageType.PRIVATE) {
+                    notificationApi.ackDm(msg.getSender(), sessionUsername);
+                } else if (msg.getChannelId() != null) {
+                    notificationApi.ackChannel(msg.getChannelId(), sessionUsername);
+                }
+                return null;
+            }
+        }.execute();
     }
 
     // ---------------------------------------------------------------
@@ -233,7 +292,7 @@ public class ChatClientGUI extends JFrame {
             chatInput.setVisible(false); // Ẩn thanh nhập tin nhắn khi ở Home
             setChannelHeader(null);
             clearChat();
-            setOnlineUsers(List.of()); 
+            setOnlineUsers(List.of());
             loadPresence(); 
         } else {
             this.activePrivateUser = null;
@@ -261,6 +320,12 @@ public class ChatClientGUI extends JFrame {
         String name = channelSidebar.getChannelName(channelId);
         setChannelHeader("# " + (name != null ? name : "kênh"));
         clearChat();
+
+        new SwingWorker<Void, Void>() {
+            @Override protected Void doInBackground() { notificationApi.ackChannel(channelId, sessionUsername); return null; }
+            @Override protected void done() { refreshUnreadCounts(); }
+        }.execute();
+
         new SwingWorker<List<MessageDTO>, Void>() {
             @Override
             protected List<MessageDTO> doInBackground() {
@@ -287,6 +352,12 @@ public class ChatClientGUI extends JFrame {
         chatInput.setVisible(true); // Hiện thanh nhập tin nhắn
         setChannelHeader("@ " + username);
         clearChat();
+
+        new SwingWorker<Void, Void>() {
+            @Override protected Void doInBackground() { notificationApi.ackDm(username, sessionUsername); return null; }
+            @Override protected void done() { refreshUnreadCounts(); }
+        }.execute();
+
         new SwingWorker<List<MessageDTO>, Void>() {
             @Override
             protected List<MessageDTO> doInBackground() {
@@ -297,8 +368,10 @@ public class ChatClientGUI extends JFrame {
             protected void done() {
                 try {
                     List<MessageDTO> history = get();
-                    for (int i = history.size() - 1; i >= 0; i--) {
-                        appendMessage(history.get(i));
+                    for (MessageDTO m : history) {
+                        if (!"[SYSTEM_FRIEND_UPDATE]".equals(m.getContent())) {
+                            appendMessage(m);
+                        }
                     }
                 } catch (Exception ex) {
                     appendSystem("Không tải được lịch sử: " + ex.getMessage());
@@ -477,15 +550,26 @@ public class ChatClientGUI extends JFrame {
         }
 
         if (msg.getType() == null) {
-            if (belongsToActiveChannel(msg)) appendMessage(msg);
+            if (belongsToActiveChannel(msg)) {
+                appendMessage(msg);
+                ackMessage(msg);
+            } else {
+                refreshUnreadCounts();
+            }
             return;
         }
         switch (msg.getType()) {
             case CHAT, PRIVATE -> {
-                if (belongsToActiveChannel(msg)) appendMessage(msg);
+                if (belongsToActiveChannel(msg)) {
+                    appendMessage(msg);
+                    ackMessage(msg);
+                } else {
+                    refreshUnreadCounts();
+                }
             }
             case EDIT -> {
                 if (belongsToActiveChannel(msg)) applyEdit(msg);
+                else refreshUnreadCounts();
             }
             case DELETE -> {
                 if (belongsToActiveChannel(msg)) applyDelete(msg);
@@ -526,6 +610,7 @@ public class ChatClientGUI extends JFrame {
     private void clearChat() {
         chatHistoryPanel.removeAll();
         chatHistoryPanel.add(Box.createVerticalGlue());
+        lastSender = null;
         chatHistoryPanel.revalidate();
         chatHistoryPanel.repaint();
         messageItems.clear();
@@ -536,7 +621,17 @@ public class ChatClientGUI extends JFrame {
         boolean isHighlighted = message.getContent() != null &&
                 message.getContent().contains("@" + sessionUsername);
 
-        ChatMessageItem item = new ChatMessageItem(message, isHighlighted, sessionUsername, messageActions);
+        boolean isConsecutive = false;
+        if (message.getType() != MessageType.SYSTEM && message.getType() != MessageType.JOIN && message.getType() != MessageType.LEAVE && message.getType() != MessageType.ERROR && !"SYSTEM".equals(message.getSender())) {
+            if (message.getSender() != null && message.getSender().equals(lastSender)) {
+                isConsecutive = true;
+            }
+            lastSender = message.getSender();
+        } else {
+            lastSender = null;
+        }
+
+        ChatMessageItem item = new ChatMessageItem(message, isHighlighted, sessionUsername, messageActions, isConsecutive);
 
         int insertIndex = chatHistoryPanel.getComponentCount() - 1;
         chatHistoryPanel.add(item, insertIndex);

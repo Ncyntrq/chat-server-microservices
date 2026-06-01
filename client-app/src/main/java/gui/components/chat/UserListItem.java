@@ -19,6 +19,22 @@ public class UserListItem extends JPanel {
         this.onContextMenu = onContextMenu;
     }
 
+    private int unreadCount = 0;
+    private gui.components.chat.UnreadBadgePanel badgePanel;
+    private final JLabel nameLabel;
+
+    public void setUnreadCount(int count) {
+        this.unreadCount = count;
+        badgePanel.setCount(count);
+        if (count > 0) {
+            nameLabel.setForeground(AppColors.TEXT_WHITE);
+        } else {
+            nameLabel.setForeground(statusColor == AppColors.STATUS_OFFLINE ? AppColors.TEXT_MUTED : AppColors.TEXT_NORMAL);
+        }
+        revalidate();
+        repaint();
+    }
+
     public UserListItem(String username, String customStatus, Color statusColor) {
         this(username, customStatus, statusColor, true);
     }
@@ -69,7 +85,7 @@ public class UserListItem extends JPanel {
         textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
         textPanel.setOpaque(false);
 
-        JLabel nameLabel = new JLabel(username);
+        nameLabel = new JLabel(username);
         nameLabel.setForeground(isOnline ? AppColors.TEXT_NORMAL : AppColors.TEXT_MUTED);
         nameLabel.setFont(AppFonts.BODY_SM);
         textPanel.add(nameLabel);
@@ -79,10 +95,56 @@ public class UserListItem extends JPanel {
             statusLabel.setForeground(AppColors.TEXT_MUTED);
             statusLabel.setFont(AppFonts.TINY);
             textPanel.add(statusLabel);
+        } else {
+            // Add an empty placeholder for dynamic status
+            JLabel statusLabel = new JLabel(" ");
+            statusLabel.setForeground(AppColors.TEXT_MUTED);
+            statusLabel.setFont(AppFonts.TINY);
+            statusLabel.setVisible(false);
+            textPanel.add(statusLabel);
+
+            // Fetch profile async to get displayName, avatar and customStatus
+            new SwingWorker<java.util.Map<String, Object>, Void>() {
+                @Override
+                protected java.util.Map<String, Object> doInBackground() {
+                    return new network.UserProfileApiClient().getProfile(username);
+                }
+                @Override
+                protected void done() {
+                    try {
+                        java.util.Map<String, Object> profile = get();
+                        if (profile != null) {
+                            if (profile.get("displayName") != null && !profile.get("displayName").toString().isBlank()) {
+                                nameLabel.setText(profile.get("displayName").toString());
+                            }
+                            if (profile.get("avatarUrl") != null) {
+                                String url = profile.get("avatarUrl").toString();
+                                if (!url.startsWith("http")) url = network.ApiConfig.GATEWAY_HTTP + url;
+                                avatar.loadAvatarFromUrl(url);
+                            }
+                            if (profile.get("customStatus") != null && !profile.get("customStatus").toString().isBlank()) {
+                                statusLabel.setText(profile.get("customStatus").toString());
+                                statusLabel.setVisible(true);
+                            }
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    } catch (Exception ignore) {}
+                }
+            }.execute();
         }
+
+        // Badge Panel
+        badgePanel = new gui.components.chat.UnreadBadgePanel();
+        
+        // Wrapper for badge to align vertically
+        JPanel eastWrapper = new JPanel(new GridBagLayout());
+        eastWrapper.setOpaque(false);
+        eastWrapper.add(badgePanel);
 
         add(avatarWrapper, BorderLayout.WEST);
         add(textPanel, BorderLayout.CENTER);
+        add(eastWrapper, BorderLayout.EAST);
     }
 
     @Override
