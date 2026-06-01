@@ -28,9 +28,14 @@ public class ChannelSidebar extends JPanel {
 
     private long activeServerId = -1;
     private LongConsumer onChannelSelected;
+    private Runnable onChannelChanged;
 
     public void setOnChannelSelected(LongConsumer onChannelSelected) {
         this.onChannelSelected = onChannelSelected;
+    }
+
+    public void setOnChannelChanged(Runnable onChannelChanged) {
+        this.onChannelChanged = onChannelChanged;
     }
 
     public long getActiveServerId() { return activeServerId; }
@@ -115,7 +120,10 @@ public class ChannelSidebar extends JPanel {
                     listPanel.add(new SidebarCategoryHeader("KÊNH CHAT", () -> {
                         Window owner = SwingUtilities.getWindowAncestor(this);
                         new CreateChannelDialog(owner, activeServerId,
-                                () -> loadChannels(activeServerId, titleLabel.getText())).setVisible(true);
+                                () -> {
+                                    loadChannels(activeServerId, titleLabel.getText());
+                                    if (onChannelChanged != null) onChannelChanged.run();
+                                }).setVisible(true);
                     }));
                     listPanel.add(Box.createVerticalStrut(4));
                     addedTextHeader = true;
@@ -143,7 +151,10 @@ public class ChannelSidebar extends JPanel {
             listPanel.add(new SidebarCategoryHeader("KÊNH CHAT", () -> {
                 Window owner = SwingUtilities.getWindowAncestor(this);
                 new CreateChannelDialog(owner, activeServerId,
-                        () -> loadChannels(activeServerId, titleLabel.getText())).setVisible(true);
+                        () -> {
+                            loadChannels(activeServerId, titleLabel.getText());
+                            if (onChannelChanged != null) onChannelChanged.run();
+                        }).setVisible(true);
             }));
             listPanel.add(Box.createVerticalStrut(4));
             JLabel empty = new JLabel("Chưa có channel");
@@ -188,7 +199,10 @@ public class ChannelSidebar extends JPanel {
 
         editItem.addActionListener(e ->
                 new EditChannelDialog(owner, channelId, name, topic,
-                        () -> loadChannels(activeServerId, titleLabel.getText())).setVisible(true));
+                        () -> {
+                            loadChannels(activeServerId, titleLabel.getText());
+                            if (onChannelChanged != null) onChannelChanged.run();
+                        }).setVisible(true));
 
         deleteItem.addActionListener(e -> {
             int confirm = JOptionPane.showConfirmDialog(this,
@@ -206,6 +220,7 @@ public class ChannelSidebar extends JPanel {
                     try {
                         get();
                         loadChannels(activeServerId, titleLabel.getText());
+                        if (onChannelChanged != null) onChannelChanged.run();
                     } catch (Exception ex) {
                         JOptionPane.showMessageDialog(ChannelSidebar.this,
                                 "Lỗi xóa channel: " + ex.getMessage());

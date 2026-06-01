@@ -10,6 +10,7 @@ public class ServerIconItem extends JPanel {
     private boolean isHovered = false;
     private boolean isActive = false;
     private boolean hasUnread = false;
+    private int unreadCount = 0;
     private final JLabel iconLabel;
 
     private Runnable onClick;            // left-click → chọn server
@@ -67,8 +68,9 @@ public class ServerIconItem extends JPanel {
         repaint();
     }
 
-    public void setHasUnread(boolean unread) {
-        this.hasUnread = unread;
+    public void setUnreadCount(int count) {
+        this.unreadCount = count;
+        this.hasUnread = (count > 0);
         repaint();
     }
 
@@ -162,14 +164,28 @@ public class ServerIconItem extends JPanel {
 
         // --- 4. DRAW RED UNREAD NOTIFICATION BADGE ---
         if (hasUnread) {
-            int badgeX = x + size - 12;
-            int badgeY = y;
-
+            String text = unreadCount > 99 ? "99+" : String.valueOf(unreadCount);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 10));
+            FontMetrics fm = g2.getFontMetrics();
+            int textWidth = fm.stringWidth(text);
+            
+            int badgeWidth = Math.max(16, textWidth + 8);
+            int badgeHeight = 16;
+            
+            int badgeX = x + size - badgeWidth / 2 - 4;
+            int badgeY = y - 4;
+            
+            // Draw background stroke
             g2.setColor(AppColors.BG_TERTIARY);
-            g2.fillOval(badgeX - 2, badgeY - 2, 16, 16);
-
+            g2.fillRoundRect(badgeX - 2, badgeY - 2, badgeWidth + 4, badgeHeight + 4, badgeHeight + 4, badgeHeight + 4);
+            
+            // Draw red background
             g2.setColor(Color.decode("#F23F42"));
-            g2.fillOval(badgeX, badgeY, 12, 12);
+            g2.fillRoundRect(badgeX, badgeY, badgeWidth, badgeHeight, badgeHeight, badgeHeight);
+            
+            // Draw text
+            g2.setColor(Color.WHITE);
+            g2.drawString(text, badgeX + (badgeWidth - textWidth) / 2, badgeY + badgeHeight - 4);
         }
 
         g2.dispose();

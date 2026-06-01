@@ -78,6 +78,26 @@ public class ChatClientGUI extends JFrame {
             }
         });
 
+        // Broadcast tạo/sửa/xóa channel
+        channelSidebar.setOnChannelChanged(() -> {
+            if (wsClient.isOpen() && activeServerId != -1) {
+                MessageDTO out = new MessageDTO(MessageType.CHAT, sessionUsername, null, "[SYSTEM_CHANNEL_UPDATE]", LocalDateTime.now());
+                out.setServerId(activeServerId);
+                out.setChannelId(null);
+                wsClient.send(out);
+            }
+        });
+
+        // Broadcast sửa/xóa/join server
+        serverSidebar.setOnServerChanged(changedServerId -> {
+            if (wsClient.isOpen() && changedServerId != -1) {
+                MessageDTO out = new MessageDTO(MessageType.CHAT, sessionUsername, null, "[SYSTEM_SERVER_UPDATE]", LocalDateTime.now());
+                out.setServerId(changedServerId);
+                out.setChannelId(null);
+                wsClient.send(out);
+            }
+        });
+
         westPanel = new JPanel(new BorderLayout());
         westPanel.add(serverSidebar, BorderLayout.WEST);
         // Ban đầu là trang chủ
@@ -195,6 +215,14 @@ public class ChatClientGUI extends JFrame {
                             friendCounts.put(entry.getKey(), entry.getValue().intValue());
                         }
                         friendSidebar.updateUnreadCounts(friendCounts);
+                    }
+                    if (resp.get("serverCounts") != null) {
+                        java.util.Map<String, Number> serverMap = (java.util.Map<String, Number>) resp.get("serverCounts");
+                        java.util.Map<Long, Integer> serverCounts = new java.util.HashMap<>();
+                        for (java.util.Map.Entry<String, Number> entry : serverMap.entrySet()) {
+                            serverCounts.put(Long.parseLong(entry.getKey()), entry.getValue().intValue());
+                        }
+                        serverSidebar.updateUnreadCounts(serverCounts);
                     }
                 } catch (Exception ignore) {
                     if (ignore instanceof InterruptedException) {
@@ -426,6 +454,22 @@ public class ChatClientGUI extends JFrame {
         if (msg.getType() == MessageType.PRIVATE && "[SYSTEM_FRIEND_UPDATE]".equals(msg.getContent())) {
             // Tải lại danh sách bạn bè mà không in ra giao diện
             if (activeServerId == -1) loadPresence();
+            return;
+        }
+
+        if ("[SYSTEM_CHANNEL_UPDATE]".equals(msg.getContent())) {
+            if (activeServerId == msg.getServerId()) {
+                channelSidebar.loadChannels(activeServerId, null);
+            }
+            return;
+        }
+
+        if ("[SYSTEM_SERVER_UPDATE]".equals(msg.getContent())) {
+            serverSidebar.loadServers(); // Cập nhật ServerSidebar cho mọi client đang online
+            if (activeServerId == msg.getServerId()) {
+                loadPresence(); // Cập nhật danh sách thành viên nếu đang mở server này
+                channelSidebar.loadChannels(activeServerId, null); // Cập nhật UI (nếu server bị đổi tên/xóa)
+            }
             return;
         }
 
