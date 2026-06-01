@@ -50,6 +50,7 @@ public class ChatClientGUI extends JFrame {
     private long activeServerId = -1;
     private long activeChannelId = -1;
     private String activePrivateUser = null;
+    private String lastSender = null;
 
     public ChatClientGUI(String sessionUsername) {
         setTitle("Chat Server v2.0 — " + sessionUsername);
@@ -234,8 +235,10 @@ public class ChatClientGUI extends JFrame {
             protected void done() {
                 try {
                     List<MessageDTO> history = get();
-                    for (int i = history.size() - 1; i >= 0; i--) {
-                        appendMessage(history.get(i));
+                    for (MessageDTO m : history) {
+                        if (!"[SYSTEM_FRIEND_UPDATE]".equals(m.getContent())) {
+                            appendMessage(m);
+                        }
                     }
                 } catch (Exception ex) {
                     appendSystem("Không tải được lịch sử: " + ex.getMessage());
@@ -400,6 +403,7 @@ public class ChatClientGUI extends JFrame {
     private void clearChat() {
         chatHistoryPanel.removeAll();
         chatHistoryPanel.add(Box.createVerticalGlue());
+        lastSender = null;
         chatHistoryPanel.revalidate();
         chatHistoryPanel.repaint();
     }
@@ -408,8 +412,18 @@ public class ChatClientGUI extends JFrame {
         boolean isHighlighted = message.getContent() != null &&
                 message.getContent().contains("@" + sessionUsername);
 
+        boolean isConsecutive = false;
+        if (message.getType() != MessageType.SYSTEM && message.getType() != MessageType.JOIN && message.getType() != MessageType.LEAVE && message.getType() != MessageType.ERROR && !"SYSTEM".equals(message.getSender())) {
+            if (message.getSender() != null && message.getSender().equals(lastSender)) {
+                isConsecutive = true;
+            }
+            lastSender = message.getSender();
+        } else {
+            lastSender = null;
+        }
+
         int insertIndex = chatHistoryPanel.getComponentCount() - 1;
-        chatHistoryPanel.add(new ChatMessageItem(message, isHighlighted), insertIndex);
+        chatHistoryPanel.add(new ChatMessageItem(message, isHighlighted, isConsecutive), insertIndex);
         chatHistoryPanel.add(Box.createVerticalStrut(10), insertIndex + 1);
 
         chatHistoryPanel.revalidate();

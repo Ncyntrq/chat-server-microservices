@@ -7,6 +7,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.Map;
 
 public class ChatInputContainer extends JPanel {
     private final JTextField inputField;
@@ -43,7 +44,42 @@ public class ChatInputContainer extends JPanel {
         rightPanel.setOpaque(false);
 
         rightPanel.add(new IconButton("🎁", e -> System.out.println("Gift menu...")));
-        rightPanel.add(new IconButton("😀", e -> System.out.println("Emoji picker...")));
+        IconButton emojiButton = new IconButton("😀", e -> {
+            JPopupMenu emojiMenu = new JPopupMenu();
+            emojiMenu.setLayout(new GridLayout(3, 5, 4, 4));
+            emojiMenu.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+            
+            for (Map.Entry<String, String> entry : EmojiHelper.EMOJIS.entrySet()) {
+                String shortcode = entry.getKey();
+                String twemojiCode = entry.getValue();
+                
+                JButton btn = new JButton();
+                btn.setPreferredSize(new Dimension(36, 36));
+                btn.setFocusPainted(false);
+                btn.setContentAreaFilled(false);
+                btn.setBorderPainted(false);
+                btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                
+                // Get preloaded icon or load it
+                ImageIcon icon = EmojiHelper.getEmojiIcon(twemojiCode, 24);
+                if (icon != null) {
+                    btn.setIcon(icon);
+                } else {
+                    btn.setText(shortcode);
+                }
+                
+                btn.addActionListener(ev -> {
+                    inputField.replaceSelection(shortcode + " ");
+                    emojiMenu.setVisible(false);
+                    inputField.requestFocusInWindow();
+                });
+                
+                emojiMenu.add(btn);
+            }
+            Component source = (Component) e.getSource();
+            emojiMenu.show(source, 0, -150);
+        });
+        rightPanel.add(emojiButton);
 
         // Send button — pill shape
         sendButton = new JButton("Gửi") {
@@ -77,6 +113,7 @@ public class ChatInputContainer extends JPanel {
             public void mouseEntered(MouseEvent e) {
                 sendButton.setBackground(AppColors.BRAND_HOVER);
             }
+
             @Override
             public void mouseExited(MouseEvent e) {
                 sendButton.setBackground(AppColors.BRAND_PRIMARY);
