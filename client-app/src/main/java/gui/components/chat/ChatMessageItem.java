@@ -20,8 +20,15 @@ public class ChatMessageItem extends JPanel {
     private final boolean isHighlighted;
     private final boolean isSystemMsg;
 
+    private final boolean isConsecutive;
+
     public ChatMessageItem(MessageDTO message, boolean isHighlighted) {
+        this(message, isHighlighted, false);
+    }
+
+    public ChatMessageItem(MessageDTO message, boolean isHighlighted, boolean isConsecutive) {
         this.isHighlighted = isHighlighted;
+        this.isConsecutive = isConsecutive;
         this.isSystemMsg = message.getType() == MessageType.SYSTEM
                 || message.getType() == MessageType.JOIN
                 || message.getType() == MessageType.LEAVE
@@ -35,10 +42,9 @@ public class ChatMessageItem extends JPanel {
         if (isHighlighted) {
             setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createMatteBorder(0, 3, 0, 0, AppColors.MSG_HIGHLIGHT_BORDER),
-                    BorderFactory.createEmptyBorder(8, 16, 8, 20)
-            ));
+                    BorderFactory.createEmptyBorder(isConsecutive ? 2 : 8, 16, isConsecutive ? 2 : 8, 20)));
         } else {
-            setBorder(BorderFactory.createEmptyBorder(8, 20, 8, 20));
+            setBorder(BorderFactory.createEmptyBorder(isConsecutive ? 2 : 8, 20, isConsecutive ? 2 : 8, 20));
         }
 
         // Hover effect
@@ -48,6 +54,7 @@ public class ChatMessageItem extends JPanel {
                 isHovered = true;
                 repaint();
             }
+
             @Override
             public void mouseExited(MouseEvent e) {
                 isHovered = false;
@@ -57,6 +64,8 @@ public class ChatMessageItem extends JPanel {
 
         if (isSystemMsg) {
             buildSystemLayout(message);
+        } else if (isConsecutive) {
+            buildCompactLayout(message);
         } else {
             buildChatLayout(message);
         }
@@ -73,20 +82,26 @@ public class ChatMessageItem extends JPanel {
 
         // System icon
         String icon = "SYSTEM".equals(message.getSender()) ? "ℹ" : "→";
-        if (message.getType() == MessageType.ERROR) icon = "⚠";
+        if (message.getType() == MessageType.ERROR)
+            icon = "⚠";
         JLabel iconLabel = new JLabel(icon);
         iconLabel.setForeground(message.getType() == MessageType.ERROR
-                ? AppColors.WARNING : AppColors.TEXT_MUTED);
+                ? AppColors.WARNING
+                : AppColors.TEXT_MUTED);
         iconLabel.setFont(AppFonts.BODY_SM);
 
         // Content
-        JLabel content = new JLabel(message.getContent());
+        JTextPane content = new JTextPane();
+        content.setEditable(false);
+        content.setOpaque(false);
         content.setFont(AppFonts.BODY_SM);
         content.setForeground(AppColors.TEXT_MUTED);
+        EmojiHelper.renderTextWithEmojis(content, message.getContent());
 
         // Time
         String time = message.getTimestamp() != null
-                ? message.getTimestamp().format(TIME_FMT) : "";
+                ? message.getTimestamp().format(TIME_FMT)
+                : "";
         JLabel timeLabel = new JLabel(time);
         timeLabel.setFont(AppFonts.TINY);
         timeLabel.setForeground(new Color(0x80, 0x84, 0x8E, 0x80));
@@ -95,15 +110,59 @@ public class ChatMessageItem extends JPanel {
         row.add(iconLabel);
         row.add(content);
         row.add(timeLabel);
-        row.add(new JLabel("—") {{ setForeground(AppColors.TEXT_MUTED); setFont(AppFonts.CAPTION); }});
+        row.add(new JLabel("—") {
+            {
+                setForeground(AppColors.TEXT_MUTED);
+                setFont(AppFonts.CAPTION);
+            }
+        });
 
         add(row, BorderLayout.CENTER);
+    }
+
+    private void buildCompactLayout(MessageDTO message) {
+        // Only show time on hover or minimal space instead of avatar
+        JPanel leftSpacer = new JPanel(new BorderLayout());
+        leftSpacer.setOpaque(false);
+        leftSpacer.setPreferredSize(new Dimension(40, 10));
+
+        JLabel timeLabel = new JLabel(message.getTimestamp() != null ? message.getTimestamp().format(TIME_FMT) : "");
+        timeLabel.setFont(AppFonts.TINY);
+        timeLabel.setForeground(new Color(0, 0, 0, 0)); // Hidden by default, can show on hover if needed, or just keep
+                                                        // spacer
+        timeLabel.setPreferredSize(new Dimension(40, 15));
+        leftSpacer.add(timeLabel, BorderLayout.NORTH);
+
+        // Content panel
+        JPanel contentPanel = new JPanel();
+        contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
+        contentPanel.setOpaque(false);
+
+        // Message body (JTextPane safely supports image inserts and wraps in BorderLayout)
+        JTextPane messageBody = new JTextPane();
+        messageBody.setEditable(false);
+        messageBody.setOpaque(false);
+        messageBody.setForeground(AppColors.TEXT_NORMAL);
+        messageBody.setFont(AppFonts.BODY);
+        messageBody.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
+        EmojiHelper.renderTextWithEmojis(messageBody, message.getContent());
+        
+        JPanel messageWrapper = new JPanel(new BorderLayout());
+        messageWrapper.setOpaque(false);
+        messageWrapper.setAlignmentX(Component.LEFT_ALIGNMENT);
+        messageWrapper.add(messageBody, BorderLayout.CENTER);
+
+        contentPanel.add(messageWrapper);
+
+        add(leftSpacer, BorderLayout.WEST);
+        add(contentPanel, BorderLayout.CENTER);
     }
 
     private void buildChatLayout(MessageDTO message) {
         String senderName = message.getSender();
         String initial = senderName != null && !senderName.isEmpty()
-                ? senderName.substring(0, 1).toUpperCase() : "?";
+                ? senderName.substring(0, 1).toUpperCase()
+                : "?";
 
         // Avatar
         AvatarBadge avatar = new AvatarBadge(initial, 40);
@@ -125,6 +184,33 @@ public class ChatMessageItem extends JPanel {
         senderLabel.setFont(AppFonts.BODY_BOLD);
         senderLabel.setForeground(AppColors.avatarColorFor(senderName));
         headerRow.add(senderLabel);
+
+        // Async fetch profile for displayName and avatar
+        new SwingWorker<java.util.Map<String, Object>, Void>() {
+            @Override
+            protected java.util.Map<String, Object> doInBackground() {
+                return new network.UserProfileApiClient().getProfile(senderName);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    java.util.Map<String, Object> profile = get();
+                    if (profile != null) {
+                        if (profile.get("displayName") != null && !profile.get("displayName").toString().isBlank()) {
+                            senderLabel.setText(profile.get("displayName").toString());
+                        }
+                        if (profile.get("avatarUrl") != null) {
+                            String url = profile.get("avatarUrl").toString();
+                            if (!url.startsWith("http"))
+                                url = network.ApiConfig.GATEWAY_HTTP + url;
+                            avatar.loadAvatarFromUrl(url);
+                        }
+                    }
+                } catch (Exception ignore) {
+                }
+            }
+        }.execute();
 
         // Admin badge
         if ("admin".equalsIgnoreCase(message.getSender())) {
@@ -163,19 +249,22 @@ public class ChatMessageItem extends JPanel {
         timeLabel.setForeground(new Color(0x80, 0x84, 0x8E, 0x99));
         headerRow.add(timeLabel);
 
-        // Message body
-        JTextArea messageBody = new JTextArea(message.getContent());
-        messageBody.setLineWrap(true);
-        messageBody.setWrapStyleWord(true);
+        // Message body (JTextPane safely supports image inserts and wraps in BorderLayout)
+        JTextPane messageBody = new JTextPane();
         messageBody.setEditable(false);
         messageBody.setOpaque(false);
         messageBody.setForeground(AppColors.TEXT_NORMAL);
         messageBody.setFont(AppFonts.BODY);
-        messageBody.setAlignmentX(Component.LEFT_ALIGNMENT);
         messageBody.setBorder(BorderFactory.createEmptyBorder(3, 0, 0, 0));
+        EmojiHelper.renderTextWithEmojis(messageBody, message.getContent());
+        
+        JPanel messageWrapper = new JPanel(new BorderLayout());
+        messageWrapper.setOpaque(false);
+        messageWrapper.setAlignmentX(Component.LEFT_ALIGNMENT);
+        messageWrapper.add(messageBody, BorderLayout.CENTER);
 
         contentPanel.add(headerRow);
-        contentPanel.add(messageBody);
+        contentPanel.add(messageWrapper);
         add(avatarWrapper, BorderLayout.WEST);
         add(contentPanel, BorderLayout.CENTER);
     }
