@@ -110,12 +110,10 @@ public class ChatMessageItem extends JPanel {
         row.add(iconLabel);
         row.add(content);
         row.add(timeLabel);
-        row.add(new JLabel("—") {
-            {
-                setForeground(AppColors.TEXT_MUTED);
-                setFont(AppFonts.CAPTION);
-            }
-        });
+        JLabel dashRight = new JLabel("—");
+        dashRight.setForeground(AppColors.TEXT_MUTED);
+        dashRight.setFont(AppFonts.CAPTION);
+        row.add(dashRight);
 
         add(row, BorderLayout.CENTER);
     }
@@ -138,21 +136,7 @@ public class ChatMessageItem extends JPanel {
         contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
         contentPanel.setOpaque(false);
 
-        // Message body (JTextPane safely supports image inserts and wraps in BorderLayout)
-        JTextPane messageBody = new JTextPane();
-        messageBody.setEditable(false);
-        messageBody.setOpaque(false);
-        messageBody.setForeground(AppColors.TEXT_NORMAL);
-        messageBody.setFont(AppFonts.BODY);
-        messageBody.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
-        EmojiHelper.renderTextWithEmojis(messageBody, message.getContent());
-        
-        JPanel messageWrapper = new JPanel(new BorderLayout());
-        messageWrapper.setOpaque(false);
-        messageWrapper.setAlignmentX(Component.LEFT_ALIGNMENT);
-        messageWrapper.add(messageBody, BorderLayout.CENTER);
-
-        contentPanel.add(messageWrapper);
+        contentPanel.add(createMessageBodyWrapper(message.getContent(), 0));
 
         add(leftSpacer, BorderLayout.WEST);
         add(contentPanel, BorderLayout.CENTER);
@@ -207,6 +191,8 @@ public class ChatMessageItem extends JPanel {
                             avatar.loadAvatarFromUrl(url);
                         }
                     }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                 } catch (Exception ignore) {
                 }
             }
@@ -249,24 +235,27 @@ public class ChatMessageItem extends JPanel {
         timeLabel.setForeground(new Color(0x80, 0x84, 0x8E, 0x99));
         headerRow.add(timeLabel);
 
-        // Message body (JTextPane safely supports image inserts and wraps in BorderLayout)
+        contentPanel.add(headerRow);
+        contentPanel.add(createMessageBodyWrapper(message.getContent(), 3));
+        add(avatarWrapper, BorderLayout.WEST);
+        add(contentPanel, BorderLayout.CENTER);
+    }
+
+    private JPanel createMessageBodyWrapper(String content, int topPadding) {
         JTextPane messageBody = new JTextPane();
         messageBody.setEditable(false);
         messageBody.setOpaque(false);
         messageBody.setForeground(AppColors.TEXT_NORMAL);
         messageBody.setFont(AppFonts.BODY);
-        messageBody.setBorder(BorderFactory.createEmptyBorder(3, 0, 0, 0));
-        EmojiHelper.renderTextWithEmojis(messageBody, message.getContent());
+        messageBody.setBorder(BorderFactory.createEmptyBorder(topPadding, 0, 0, 0));
+        EmojiHelper.renderTextWithEmojis(messageBody, content);
         
         JPanel messageWrapper = new JPanel(new BorderLayout());
         messageWrapper.setOpaque(false);
         messageWrapper.setAlignmentX(Component.LEFT_ALIGNMENT);
         messageWrapper.add(messageBody, BorderLayout.CENTER);
-
-        contentPanel.add(headerRow);
-        contentPanel.add(messageWrapper);
-        add(avatarWrapper, BorderLayout.WEST);
-        add(contentPanel, BorderLayout.CENTER);
+        
+        return messageWrapper;
     }
 
     @Override
