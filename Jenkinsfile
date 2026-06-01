@@ -8,12 +8,12 @@ pipeline {
         COMPOSE_FILE_APP   = 'docker-compose.yml'
         COMPOSE_FILE_DEV   = 'docker-compose.devops.yml'
         NEWMAN_TEST_DIR    = 'tnguyen/test'
-        SERVICES           = 'gateway-service auth-service server-service channel-service messaging-service presence-service log-service notification-service file-service role-service user-profile-service friend-service'
+        SERVICES           ='gateway-service auth-service server-service channel-service messaging-service presence-service log-service notification-service file-service role-service user-profile-service friend-service'
     }
 
     tools {
-        maven 'Maven-3.9'
-        nodejs 'NodeJS-20'
+        maven 'Maven3'
+        jdk 'Java17'
     }
 
     options {

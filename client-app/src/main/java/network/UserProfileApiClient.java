@@ -43,29 +43,17 @@ public class UserProfileApiClient {
         return putJson("/api/users/status", body);
     }
 
-    // UP3 — Upload avatar (multipart/form-data, max 2MB, JPEG/PNG)
+    // UP3 — Upload avatar sử dụng file-service và update avatarUrl
+    @SuppressWarnings("unchecked")
     public Map<String, Object> uploadAvatar(java.io.File file) {
-        String token = SessionManager.get().getAccessToken();
-        if (token == null) throw new ApiException("Chưa đăng nhập — không có token");
-        if (file == null || !file.isFile()) throw new ApiException("File avatar không hợp lệ");
-        if (file.length() > 2 * 1024 * 1024) throw new ApiException("Avatar vượt quá 2MB");
-
-        String url = ApiConfig.GATEWAY_HTTP + "/api/users/avatar";
-        String boundary = "----ChatSeverBoundary" + Long.toHexString(System.nanoTime());
         try {
-            byte[] body = buildAvatarMultipart(file, boundary);
-            HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .timeout(Duration.ofSeconds(30))
-                    .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                    .header("Authorization", "Bearer " + token)
-                    .POST(HttpRequest.BodyPublishers.ofByteArray(body))
-                    .build();
-            HttpResponse<String> resp = HttpClientHolder.get().send(req, HttpResponse.BodyHandlers.ofString());
-            if (resp.statusCode() / 100 != 2) {
-                throw new ApiException(resp.statusCode(), parseError(resp.body()));
-            }
-            return json.readValue(resp.body(), new TypeReference<Map<String, Object>>() {});
+            // 1. Upload ảnh lên file-service (MinIO)
+            String uploadedUrl = new network.FileApiClient().uploadAvatar(file);
+
+            // 2. Cập nhật URL vào User Profile
+            Map<String, String> body = new java.util.HashMap<>();
+            body.put("avatarUrl", uploadedUrl);
+            return putJson("/api/users/profile", body);
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {

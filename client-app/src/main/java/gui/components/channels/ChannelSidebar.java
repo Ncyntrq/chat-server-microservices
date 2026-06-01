@@ -109,6 +109,7 @@ public class ChannelSidebar extends JPanel {
 
     private void renderChannels(List<Map<String, Object>> channels) {
         listPanel.removeAll();
+        channelItems.clear();
 
         boolean addedTextHeader = false;
         boolean addedVoiceHeader = false;
@@ -145,13 +146,30 @@ public class ChannelSidebar extends JPanel {
         }
 
         if (!addedTextHeader && !addedVoiceHeader) {
-            JLabel empty = new JLabel("Chưa có channel — nhấn ➕ để tạo");
+            listPanel.add(new SidebarCategoryHeader("KÊNH CHAT", () -> {
+                Window owner = SwingUtilities.getWindowAncestor(this);
+                new CreateChannelDialog(owner, activeServerId,
+                        () -> loadChannels(activeServerId, titleLabel.getText())).setVisible(true);
+            }));
+            listPanel.add(Box.createVerticalStrut(4));
+            JLabel empty = new JLabel("Chưa có channel");
             empty.setForeground(AppColors.TEXT_MUTED);
             listPanel.add(empty);
         }
 
         listPanel.revalidate();
         listPanel.repaint();
+    }
+
+    private final Map<Long, ChannelListItem> channelItems = new java.util.HashMap<>();
+
+    public void updateUnreadCounts(Map<Long, Integer> unreadCounts) {
+        SwingUtilities.invokeLater(() -> {
+            for (Map.Entry<Long, ChannelListItem> entry : channelItems.entrySet()) {
+                Integer count = unreadCounts.get(entry.getKey());
+                entry.getValue().setUnreadCount(count != null ? count : 0);
+            }
+        });
     }
 
     private ChannelListItem buildItem(Map<String, Object> ch, boolean isVoice) {
@@ -164,6 +182,8 @@ public class ChannelSidebar extends JPanel {
             if (onChannelSelected != null) onChannelSelected.accept(id);
         });
         item.setOnContextMenu(() -> showChannelMenu(item, id, name, topic));
+        
+        channelItems.put(id, item);
         return item;
     }
 

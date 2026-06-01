@@ -17,6 +17,21 @@ public class ChannelListItem extends JPanel {
     public void setOnClick(Runnable onClick) { this.onClick = onClick; }
     public void setOnContextMenu(Runnable onContextMenu) { this.onContextMenu = onContextMenu; }
 
+    private int unreadCount = 0;
+    private final gui.components.chat.UnreadBadgePanel badgePanel;
+
+    public void setUnreadCount(int count) {
+        this.unreadCount = count;
+        badgePanel.setCount(count);
+        if (count > 0) {
+            nameLabel.setForeground(AppColors.TEXT_WHITE);
+        } else {
+            nameLabel.setForeground(isHovered ? AppColors.TEXT_WHITE : AppColors.TEXT_MUTED);
+        }
+        revalidate();
+        repaint();
+    }
+
     public ChannelListItem(String channelName, boolean isVoice) {
         this.isVoice = isVoice;
 
@@ -36,9 +51,18 @@ public class ChannelListItem extends JPanel {
         nameLabel = new JLabel(channelName);
         nameLabel.setFont(new Font("SansSerif", Font.PLAIN, 14));
         nameLabel.setForeground(AppColors.TEXT_MUTED);
+        
+        // Badge Panel
+        badgePanel = new gui.components.chat.UnreadBadgePanel();
+        
+        // Wrapper for badge to align vertically
+        JPanel eastWrapper = new JPanel(new GridBagLayout());
+        eastWrapper.setOpaque(false);
+        eastWrapper.add(badgePanel);
 
         add(prefixLabel, BorderLayout.WEST);
         add(nameLabel, BorderLayout.CENTER);
+        add(eastWrapper, BorderLayout.EAST);
 
         // Hover Animation logic
         addMouseListener(new MouseAdapter() {
@@ -52,7 +76,9 @@ public class ChannelListItem extends JPanel {
             @Override
             public void mouseExited(MouseEvent e) {
                 isHovered = false;
-                nameLabel.setForeground(AppColors.TEXT_MUTED);
+                if (unreadCount == 0) {
+                    nameLabel.setForeground(AppColors.TEXT_MUTED);
+                }
                 repaint();
             }
 
