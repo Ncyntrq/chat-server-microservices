@@ -111,6 +111,8 @@ public class UserListItem extends JPanel {
                                 statusLabel.setVisible(true);
                             }
                         }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
                     } catch (Exception ignore) {}
                 }
             }.execute();

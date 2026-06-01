@@ -83,7 +83,7 @@ public class EmojiHelper {
             }
             
             try {
-                if (firstMatchIdx != -1) {
+                if (firstMatchIdx != -1 && foundShortcode != null && foundTwemoji != null) {
                     // Append text before the shortcode
                     if (firstMatchIdx > 0) {
                         textPane.getDocument().insertString(textPane.getDocument().getLength(), remaining.substring(0, firstMatchIdx), null);
