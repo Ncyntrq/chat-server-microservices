@@ -14,17 +14,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.LongConsumer;
 
-/**
- * Thanh channel (240px). Load channels của server đang chọn từ API và render động.
- * - Click channel → callback onChannelSelected(channelId)
- * - Right-click channel → menu Sửa / Xóa
- * - Nút ➕ ở header → tạo channel mới
- */
 public class ChannelSidebar extends JPanel {
 
     private final ChannelApiClient channelApi = new ChannelApiClient();
     private final JLabel titleLabel;
     private final JPanel listPanel;
+    private final java.util.Map<Long, String> channelNames = new java.util.HashMap<>();
+    private final Map<Long, ChannelListItem> channelItems = new java.util.HashMap<>();
+    private UserFooterPanel accountFooter;
 
     private long activeServerId = -1;
     private LongConsumer onChannelSelected;
@@ -45,12 +42,15 @@ public class ChannelSidebar extends JPanel {
 
     public long getActiveServerId() { return activeServerId; }
 
+    public String getChannelName(long channelId) {
+        return channelNames.get(channelId);
+    }
+
     public ChannelSidebar(String sessionUsername) {
         setLayout(new BorderLayout());
         setBackground(AppColors.BG_SECONDARY);
         setPreferredSize(new Dimension(240, 0));
 
-        // --- HEADER: tên server + nút ➕ ---
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setBackground(AppColors.BG_SECONDARY);
         headerPanel.setPreferredSize(new Dimension(240, 48));
@@ -62,7 +62,6 @@ public class ChannelSidebar extends JPanel {
         titleLabel.setBorder(BorderFactory.createEmptyBorder(0, 16, 0, 0));
         headerPanel.add(titleLabel, BorderLayout.CENTER);
 
-        // --- CHANNEL LIST ---
         listPanel = new JPanel();
         listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
         listPanel.setBackground(AppColors.BG_SECONDARY);
@@ -76,7 +75,6 @@ public class ChannelSidebar extends JPanel {
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
 
-        // --- FOOTER ---
         accountFooter = new UserFooterPanel(sessionUsername, () -> {
             if (onUserChanged != null) onUserChanged.run();
         });
@@ -86,15 +84,12 @@ public class ChannelSidebar extends JPanel {
         add(accountFooter, BorderLayout.SOUTH);
     }
 
-    private UserFooterPanel accountFooter;
-
     public void refreshUserFooter() {
         if (accountFooter != null) {
             accountFooter.refreshAvatar();
         }
     }
 
-    /** Tải channels của server và render. serverName dùng cho tiêu đề. */
     public void loadChannels(long serverId, String serverName) {
         this.activeServerId = serverId;
         if (serverName != null) titleLabel.setText(serverName);
@@ -128,7 +123,6 @@ public class ChannelSidebar extends JPanel {
         boolean addedTextHeader = false;
         boolean addedVoiceHeader = false;
 
-        // Kênh chữ trước
         for (Map<String, Object> ch : channels) {
             if (!"VOICE".equalsIgnoreCase(str(ch.get("type")))) {
                 if (!addedTextHeader) {
@@ -148,7 +142,6 @@ public class ChannelSidebar extends JPanel {
             }
         }
 
-        // Kênh thoại
         for (Map<String, Object> ch : channels) {
             if ("VOICE".equalsIgnoreCase(str(ch.get("type")))) {
                 if (!addedVoiceHeader) {
@@ -180,8 +173,6 @@ public class ChannelSidebar extends JPanel {
         listPanel.revalidate();
         listPanel.repaint();
     }
-
-    private final Map<Long, ChannelListItem> channelItems = new java.util.HashMap<>();
 
     public void updateUnreadCounts(Map<Long, Integer> unreadCounts) {
         SwingUtilities.invokeLater(() -> {
