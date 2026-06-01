@@ -79,6 +79,41 @@ public class UserListItem extends JPanel {
             statusLabel.setForeground(AppColors.TEXT_MUTED);
             statusLabel.setFont(AppFonts.TINY);
             textPanel.add(statusLabel);
+        } else {
+            // Add an empty placeholder for dynamic status
+            JLabel statusLabel = new JLabel(" ");
+            statusLabel.setForeground(AppColors.TEXT_MUTED);
+            statusLabel.setFont(AppFonts.TINY);
+            statusLabel.setVisible(false);
+            textPanel.add(statusLabel);
+
+            // Fetch profile async to get displayName, avatar and customStatus
+            new SwingWorker<java.util.Map<String, Object>, Void>() {
+                @Override
+                protected java.util.Map<String, Object> doInBackground() {
+                    return new network.UserProfileApiClient().getProfile(username);
+                }
+                @Override
+                protected void done() {
+                    try {
+                        java.util.Map<String, Object> profile = get();
+                        if (profile != null) {
+                            if (profile.get("displayName") != null && !profile.get("displayName").toString().isBlank()) {
+                                nameLabel.setText(profile.get("displayName").toString());
+                            }
+                            if (profile.get("avatarUrl") != null) {
+                                String url = profile.get("avatarUrl").toString();
+                                if (!url.startsWith("http")) url = network.ApiConfig.GATEWAY_HTTP + url;
+                                avatar.loadAvatarFromUrl(url);
+                            }
+                            if (profile.get("customStatus") != null && !profile.get("customStatus").toString().isBlank()) {
+                                statusLabel.setText(profile.get("customStatus").toString());
+                                statusLabel.setVisible(true);
+                            }
+                        }
+                    } catch (Exception ignore) {}
+                }
+            }.execute();
         }
 
         add(avatarWrapper, BorderLayout.WEST);

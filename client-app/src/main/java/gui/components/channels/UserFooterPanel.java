@@ -59,8 +59,6 @@ public class UserFooterPanel extends JPanel {
         controlsWrapper.setOpaque(false);
 
         // Reusing your standalone IconButton component with custom offsets
-        controlsWrapper.add(new IconButton("🎙")); // Mute mic
-        controlsWrapper.add(new IconButton("🎧")); // Deafen audio
         controlsWrapper.add(new IconButton("⚙", e -> {
             Window owner = SwingUtilities.getWindowAncestor(this);
             UserSettingsDialog dialog = new UserSettingsDialog(owner);
