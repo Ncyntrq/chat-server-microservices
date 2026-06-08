@@ -131,13 +131,7 @@ public class ChatHistoryView extends JScrollPane {
     }
 
     private JComponent buildPlaceholder() {
-        JLabel label = new JLabel(
-                "<html><div style='text-align:center;'>💬<br><br>" + placeholderText + "</div></html>",
-                SwingConstants.CENTER);
-        label.setFont(AppFonts.BODY);
-        label.setForeground(AppColors.TEXT_MUTED);
-        label.setAlignmentX(Component.CENTER_ALIGNMENT);
-        return label;
+        return new gui.components.chat.EmptyStatePanel(placeholderText);
     }
 
     /** Áp dụng broadcast EDIT: cập nhật nội dung item tại chỗ. */
@@ -164,11 +158,12 @@ public class ChatHistoryView extends JScrollPane {
         }
         if (idx < 0) return;
 
+        chatHistoryPanel.remove(item);
+
         // Bổ sung: nếu xóa tin đầu tiên (có avatar), biến tin tiếp theo thành tin đầu tiên để hiện avatar
         if (!item.isConsecutive()) {
-            int nextIdx = idx + 2; // +1 là Box.Filler (strut đệm)
-            if (nextIdx < comps.length && comps[nextIdx] instanceof ChatMessageItem) {
-                ChatMessageItem nextItem = (ChatMessageItem) comps[nextIdx];
+            if (idx < chatHistoryPanel.getComponentCount() && chatHistoryPanel.getComponent(idx) instanceof ChatMessageItem) {
+                ChatMessageItem nextItem = (ChatMessageItem) chatHistoryPanel.getComponent(idx);
                 if (nextItem.isConsecutive() && 
                     item.getMessage().getSender().equals(nextItem.getMessage().getSender())) {
                     
@@ -178,13 +173,11 @@ public class ChatHistoryView extends JScrollPane {
                     ChatMessageItem upgradedItem = new ChatMessageItem(nextMsg, highlighted, sessionUsername, messageActions, false, floatingLayer);
                     
                     messageItems.put(nextMsg.getMessageId(), upgradedItem);
-                    chatHistoryPanel.remove(nextIdx);
-                    chatHistoryPanel.add(upgradedItem, nextIdx);
+                    chatHistoryPanel.remove(idx);
+                    chatHistoryPanel.add(upgradedItem, idx);
                 }
             }
         }
-
-        chatHistoryPanel.remove(item);
         if (item.getToolbar() != null) {
             floatingLayer.remove(item.getToolbar());
         }

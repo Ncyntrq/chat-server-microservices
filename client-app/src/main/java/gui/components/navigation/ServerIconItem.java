@@ -106,8 +106,9 @@ public class ServerIconItem extends JPanel {
                 try {
                     Image img = get();
                     if(img != null) {
-                        gui.utils.ImageCache.put(urlString, img);
-                        serverImage = img;
+                        Image scaledImg = img.getScaledInstance(40, 40, Image.SCALE_SMOOTH);
+                        gui.utils.ImageCache.put(urlString, scaledImg);
+                        serverImage = scaledImg;
                         iconLabel.setVisible(false);
                         repaint();
                     }
