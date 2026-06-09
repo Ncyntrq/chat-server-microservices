@@ -12,6 +12,7 @@ import java.awt.*;
  * - Hồ sơ (Profile): displayName, bio, avatar
  * - Bảo mật (Security): đổi mật khẩu
  * - Trạng thái (Status): online/idle/dnd/invisible
+ * - Giao diện (Appearance): chọn theme Sáng/Tối
  */
 public class UserSettingsDialog extends JDialog {
 
@@ -32,6 +33,7 @@ public class UserSettingsDialog extends JDialog {
         tabs.addTab("Hồ sơ", new ProfileEditPanel(username, profileApi, onProfileChanged));
         tabs.addTab("Bảo mật", new AccountSecurityPanel());
         tabs.addTab("Trạng thái", new StatusPanel(profileApi));
+        tabs.addTab("Giao diện", new AppearancePanel(this));
 
         add(tabs);
     }

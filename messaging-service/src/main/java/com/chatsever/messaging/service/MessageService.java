@@ -68,6 +68,35 @@ public class MessageService {
         return false;
     }
 
+    /**
+     * Kiểm tra quyền ĐỌC (tìm kiếm) tin nhắn của 1 channel — KHÔNG side-effect
+     * (khác hasPermission: không tự thêm member). Dùng cho message search.
+     * - Channel chưa có tin nhắn hoặc serverId null (global) → không ràng buộc.
+     * - Ngược lại: chỉ cho phép nếu user là member của server sở hữu channel.
+     */
+    public boolean canSearchChannel(Long channelId, String username) {
+        if (channelId == null) return false;
+        List<Long> serverIds = messageRepository.findServerIdsByChannel(
+                channelId, org.springframework.data.domain.PageRequest.of(0, 1));
+        if (serverIds.isEmpty()) return true; // không có dữ liệu để lộ
+        return isServerMember(serverIds.get(0), username);
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean isServerMember(Long serverId, String username) {
+        if (serverId == null) return true;
+        try {
+            Map<String, Object> details = serverServiceClient.getServerDetails(serverId);
+            if (details != null && details.containsKey("members")) {
+                List<Map<String, Object>> members = (List<Map<String, Object>>) details.get("members");
+                return members.stream().anyMatch(m -> username.equals(m.get("userId")));
+            }
+        } catch (Exception e) {
+            logger.error("Error checking server membership: {}", e.getMessage());
+        }
+        return false;
+    }
+
     // Gửi tin nhắn Broadcast theo Channel hoặc Global nếu serverId null
     public void broadcastToChannel(MessageDTO msg, Map<String, WebSocketSession> sessions) throws Exception {
         Set<String> serverMembers = null;

@@ -44,9 +44,11 @@ public class UserProfileController {
         return ResponseEntity.ok(profileService.updateStatus(username, payload.get("status")));
     }
 
-    // UP5 — Tìm kiếm user
+    // UP5 — Tìm kiếm user (loại trừ chính mình nếu có X-User-Id)
     @GetMapping("/search")
-    public ResponseEntity<List<UserProfile>> searchUsers(@RequestParam("q") String keyword) {
-        return ResponseEntity.ok(profileService.searchUsers(keyword));
+    public ResponseEntity<List<UserProfile>> searchUsers(
+            @RequestParam("q") String keyword,
+            @RequestHeader(value = "X-User-Id", required = false) String currentUser) {
+        return ResponseEntity.ok(profileService.searchUsers(keyword, currentUser));
     }
 }

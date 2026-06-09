@@ -14,6 +14,7 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -37,6 +38,7 @@ public class ChatMessageItem extends JPanel {
     private final boolean isOwn;
 
     private boolean isHovered = false;
+    private boolean menuOpen = false; // menu "⋯" đang mở → giữ toolbar hiển thị
     private boolean isEditing = false;
     private boolean isAttachment = false;
     private final boolean isHighlighted;
@@ -44,8 +46,9 @@ public class ChatMessageItem extends JPanel {
 
     // Components dùng cho inline-edit & cập nhật động
     private JPanel contentPanel;
+    private JPanel centerWrap; // bọc content + toolbar (căn giữa dọc, toolbar nằm cạnh tin)
     private JPanel headerRow;
-    private JTextArea messageBody;
+    private JTextPane messageBody;
     private JPanel toolbar;
     private boolean editedBadgeShown = false;
 
@@ -85,29 +88,25 @@ public class ChatMessageItem extends JPanel {
         setLayout(new BorderLayout(12, 0));
         setOpaque(false);
 
-        // Padding
+        // Padding (margin dọc giữa các tin nhỏ lại → các box sát nhau hơn)
         if (isHighlighted) {
             setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createMatteBorder(0, 3, 0, 0, AppColors.MSG_HIGHLIGHT_BORDER),
-                    BorderFactory.createEmptyBorder(isConsecutive ? 2 : 8, 16, isConsecutive ? 2 : 8, 20)));
+                    BorderFactory.createEmptyBorder(isConsecutive ? 1 : 4, 16, isConsecutive ? 1 : 4, 20)));
         } else {
-            setBorder(BorderFactory.createEmptyBorder(isConsecutive ? 2 : 8, 20, isConsecutive ? 2 : 8, 20));
+            setBorder(BorderFactory.createEmptyBorder(isConsecutive ? 1 : 4, 20, isConsecutive ? 1 : 4, 20));
         }
 
         if (isSystemMsg) {
             buildSystemLayout(message);
-            installHover(this);
-        } else if (isConsecutive) {
-            buildCompactLayout(message);
-            installHover(this);
         } else {
-            buildChatLayout(message);
-            // Toolbar nổi chỉ gắn khi có callback (tức là tin nhắn thật trong kênh)
-            if (actions != null) {
-                buildToolbar();
-            }
-            installHover(this);
+            // Tin gộp nhóm (consecutive) dùng CHUNG layout, chỉ ẩn avatar + header
+            // ⇒ vẫn đủ tính năng: attachment, wrap, và toolbar Sửa/Ghim/Xóa.
+            buildChatLayout(message, isConsecutive);
+            // Panel hover: giờ (cho tin compact) + nút "⋯" (nếu có quyền). Tự bỏ qua nếu rỗng.
+            buildHoverBar();
         }
+        installHover(this);
     }
 
     private void buildSystemLayout(MessageDTO message) {
@@ -129,8 +128,17 @@ public class ChatMessageItem extends JPanel {
                 : AppColors.TEXT_MUTED);
         iconLabel.setFont(AppFonts.BODY_SM);
 
-        // Content
-        JTextPane content = new JTextPane();
+        // Content — giới hạn bề rộng để tin hệ thống/lỗi dài tự wrap, không kéo giãn hàng.
+        JTextPane content = new JTextPane() {
+            @Override public Dimension getPreferredSize() {
+                setSize(maxBubbleWidth(), Short.MAX_VALUE);
+                return super.getPreferredSize();
+            }
+            @Override public Dimension getMaximumSize() {
+                return new Dimension(maxBubbleWidth(), getPreferredSize().height);
+            }
+        };
+        content.setEditorKit(new WrapEditorKit()); // bẻ được từ dài
         content.setEditable(false);
         content.setOpaque(false);
         content.setFont(AppFonts.BODY_SM);
@@ -157,164 +165,156 @@ public class ChatMessageItem extends JPanel {
         add(row, BorderLayout.CENTER);
     }
 
-    private void buildCompactLayout(MessageDTO message) {
-        // Only show time on hover or minimal space instead of avatar
-        JPanel leftSpacer = new JPanel(new BorderLayout());
-        leftSpacer.setOpaque(false);
-        leftSpacer.setPreferredSize(new Dimension(40, 10));
-
-        JLabel timeLabel = new JLabel(message.getTimestamp() != null ? message.getTimestamp().format(TIME_FMT) : "");
-        timeLabel.setFont(AppFonts.TINY);
-        timeLabel.setForeground(new Color(0, 0, 0, 0)); // Hidden by default, can show on hover if needed, or just keep
-                                                        // spacer
-        timeLabel.setPreferredSize(new Dimension(40, 15));
-        leftSpacer.add(timeLabel, BorderLayout.NORTH);
-
-        // Content panel
-        JPanel contentPanel = new JPanel();
-        contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
-        contentPanel.setOpaque(false);
-
-        contentPanel.add(createMessageBodyWrapper(message.getContent(), 0));
-
-        add(leftSpacer, BorderLayout.WEST);
-        add(contentPanel, BorderLayout.CENTER);
+    /** Thân tin dạng text: JTextPane render emoji + wrap (bẻ được cả từ dài) + giới hạn bề rộng. */
+    private JTextPane createTextBody(String content, int topPadding) {
+        final String raw = content == null ? "" : content;
+        JTextPane pane = new JTextPane() {
+            @Override public Dimension getPreferredSize() {
+                // Bề rộng ÔM SÁT nội dung: = dòng dài nhất (cap ở maxBubble) ⇒ box & toolbar bám sát tin.
+                int cap = maxBubbleWidth();
+                FontMetrics fm = getFontMetrics(getFont());
+                int longest = 0;
+                for (String line : raw.split("\n", -1)) longest = Math.max(longest, fm.stringWidth(line));
+                int w = Math.max(24, Math.min(cap, longest + 6));
+                setSize(w, Short.MAX_VALUE);
+                return new Dimension(w, super.getPreferredSize().height);
+            }
+            @Override public Dimension getMaximumSize() {
+                return getPreferredSize();
+            }
+        };
+        pane.setEditorKit(new WrapEditorKit()); // bẻ giữa từ dài (URL/chuỗi liền)
+        pane.setEditable(false);
+        pane.setOpaque(false);
+        pane.setForeground(AppColors.TEXT_NORMAL);
+        pane.setFont(AppFonts.BODY);
+        pane.setAlignmentX(Component.LEFT_ALIGNMENT);
+        pane.setBorder(BorderFactory.createEmptyBorder(topPadding, 0, 0, 0));
+        EmojiHelper.renderTextWithEmojis(pane, content);
+        return pane;
     }
 
-    private void buildChatLayout(MessageDTO message) {
+    /**
+     * Dựng layout tin nhắn. {@code compact==true} (tin gộp nhóm cùng người gửi) ẩn avatar + header,
+     * nhưng vẫn dùng CHUNG phần thân + được gắn toolbar ⇒ đủ tính năng như tin đầu nhóm.
+     */
+    private void buildChatLayout(MessageDTO message, boolean compact) {
         String senderName = message.getSender();
-        String initial = senderName != null && !senderName.isEmpty()
-                ? senderName.substring(0, 1).toUpperCase()
-                : "?";
 
-        // Avatar
-        AvatarBadge avatar = new AvatarBadge(initial, 40);
-        JPanel avatarWrapper = new JPanel(new BorderLayout());
-        avatarWrapper.setOpaque(false);
-        avatarWrapper.add(avatar, BorderLayout.NORTH);
+        // WEST: avatar đầy đủ, hoặc spacer canh lề khi gộp nhóm
+        JComponent west;
+        AvatarBadge avatar = null;
+        int col = gui.theme.UiScale.get().scaled(40); // cột avatar scale theo zoom (#3)
+        if (compact) {
+            JPanel spacer = new JPanel();
+            spacer.setOpaque(false);
+            spacer.setPreferredSize(new Dimension(col, 10));
+            spacer.setMinimumSize(new Dimension(col, 1));
+            spacer.setMaximumSize(new Dimension(col, Short.MAX_VALUE));
+            west = spacer;
+        } else {
+            String initial = senderName != null && !senderName.isEmpty()
+                    ? senderName.substring(0, 1).toUpperCase() : "?";
+            avatar = new AvatarBadge(initial, col);
+            JPanel avatarWrapper = new JPanel(new BorderLayout());
+            avatarWrapper.setOpaque(false);
+            avatarWrapper.add(avatar, BorderLayout.NORTH);
+            west = avatarWrapper;
+        }
 
         // Content panel
         contentPanel = new JPanel();
         contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
         contentPanel.setOpaque(false);
 
-        // Header row: username + badges + timestamp
-        headerRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-        headerRow.setOpaque(false);
-        headerRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        if (!compact) {
+            // Header row: username + badges + timestamp (chỉ ở tin đầu nhóm)
+            headerRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+            headerRow.setOpaque(false);
+            headerRow.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JLabel senderLabel = new JLabel(senderName);
-        senderLabel.setFont(AppFonts.BODY_BOLD);
-        senderLabel.setForeground(AppColors.avatarColorFor(senderName));
-        headerRow.add(senderLabel);
+            JLabel senderLabel = new JLabel(senderName);
+            senderLabel.setFont(AppFonts.BODY_BOLD);
+            senderLabel.setForeground(AppColors.avatarColorFor(senderName));
+            headerRow.add(senderLabel);
 
-        // Async fetch profile for displayName and avatar
-        new SwingWorker<java.util.Map<String, Object>, Void>() {
-            @Override
-            protected java.util.Map<String, Object> doInBackground() {
-                return new network.UserProfileApiClient().getProfile(senderName);
-            }
+            // #1: ProfileLoader (cache + gộp request trùng) → tối đa 1 HTTP/user thay vì 1/tin nhắn
+            final AvatarBadge avatarRef = avatar;
+            gui.utils.ProfileLoader.load(senderName, profile -> {
+                if (profile == null) return;
+                Object dn = profile.get("displayName");
+                if (dn != null && !dn.toString().isBlank()) senderLabel.setText(dn.toString());
+                Object av = profile.get("avatarUrl");
+                if (av != null && avatarRef != null) {
+                    String url = av.toString();
+                    if (!url.startsWith("http")) url = network.ApiConfig.GATEWAY_HTTP + url;
+                    avatarRef.loadAvatarFromUrl(url);
+                }
+            });
 
-            @Override
-            protected void done() {
-                try {
-                    java.util.Map<String, Object> profile = get();
-                    if (profile != null) {
-                        if (profile.get("displayName") != null && !profile.get("displayName").toString().isBlank()) {
-                            senderLabel.setText(profile.get("displayName").toString());
-                        }
-                        if (profile.get("avatarUrl") != null) {
-                            String url = profile.get("avatarUrl").toString();
-                            if (!url.startsWith("http"))
-                                url = network.ApiConfig.GATEWAY_HTTP + url;
-                            avatar.loadAvatarFromUrl(url);
-                        }
+            // Admin badge
+            if ("admin".equalsIgnoreCase(message.getSender())) {
+                JLabel badge = new JLabel(" ADMIN ") {
+                    @Override
+                    protected void paintComponent(Graphics g) {
+                        Graphics2D g2 = (Graphics2D) g.create();
+                        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                        g2.setColor(AppColors.BRAND_PRIMARY);
+                        g2.fillRoundRect(0, 0, getWidth(), getHeight(), 6, 6);
+                        g2.dispose();
+                        super.paintComponent(g);
                     }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                } catch (Exception ignore) {
-                }
+                };
+                badge.setOpaque(false);
+                badge.setForeground(Color.WHITE);
+                badge.setFont(AppFonts.TINY);
+                badge.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+                headerRow.add(badge);
             }
-        }.execute();
 
-        // Admin badge
-        if ("admin".equalsIgnoreCase(message.getSender())) {
-            JLabel badge = new JLabel(" ADMIN ") {
-                @Override
-                protected void paintComponent(Graphics g) {
-                    Graphics2D g2 = (Graphics2D) g.create();
-                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                    g2.setColor(AppColors.BRAND_PRIMARY);
-                    g2.fillRoundRect(0, 0, getWidth(), getHeight(), 6, 6);
-                    g2.dispose();
-                    super.paintComponent(g);
-                }
-            };
-            badge.setOpaque(false);
-            badge.setForeground(Color.WHITE);
-            badge.setFont(AppFonts.TINY);
-            badge.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-            headerRow.add(badge);
+            // Timestamp
+            String timeStr = message.getTimestamp() != null
+                    ? message.getTimestamp().format(TIME_FMT) : "Bây giờ";
+            JLabel timeLabel = new JLabel(timeStr);
+            timeLabel.setFont(AppFonts.CAPTION);
+            timeLabel.setForeground(new Color(0x80, 0x84, 0x8E, 0x99));
+            headerRow.add(timeLabel);
+
+            if (Boolean.TRUE.equals(message.getIsEdited())) {
+                addEditedBadge();
+            }
+
+            contentPanel.add(headerRow);
         }
 
-        // Timestamp
-        String timeStr = message.getTimestamp() != null
-                ? message.getTimestamp().format(TIME_FMT)
-                : "Bây giờ";
-        JLabel timeLabel = new JLabel(timeStr);
-        timeLabel.setFont(AppFonts.CAPTION);
-        timeLabel.setForeground(new Color(0x80, 0x84, 0x8E, 0x99));
-        headerRow.add(timeLabel);
-
-        // Edited badge (nếu đã sửa từ trước)
-        if (Boolean.TRUE.equals(message.getIsEdited())) {
-            addEditedBadge();
-        }
-
-        contentPanel.add(headerRow);
-
-        // Phân biệt: tin nhắn đính kèm file/ảnh hay text thường
+        // Body chung: đính kèm (ảnh/file) hay text (emoji + wrap)
         Attachment att = parseAttachment(message.getContent());
         this.isAttachment = att != null;
         if (att != null) {
             contentPanel.add(att.isImage() ? buildImageAttachment(att) : buildFileCard(att));
         } else {
-            // Message body (text thường)
-            messageBody = new JTextArea(message.getContent());
-            messageBody.setLineWrap(true);
-            messageBody.setWrapStyleWord(true);
-            messageBody.setEditable(false);
-            messageBody.setOpaque(false);
-            messageBody.setForeground(AppColors.TEXT_NORMAL);
-            messageBody.setFont(AppFonts.BODY);
-            messageBody.setAlignmentX(Component.LEFT_ALIGNMENT);
-            messageBody.setBorder(BorderFactory.createEmptyBorder(3, 0, 0, 0));
+            messageBody = createTextBody(message.getContent(), compact ? 0 : 3);
             contentPanel.add(messageBody);
         }
 
-        add(avatarWrapper, BorderLayout.WEST);
-        add(contentPanel, BorderLayout.CENTER);
-    }
+        // Bọc content trong GridBag: content ôm sát (gridx0) + glue đẩy về trái (gridx2).
+        // Toolbar sẽ chèn vào gridx1 (cạnh tin) trong buildToolbar. weighty=1 ⇒ căn giữa dọc.
+        centerWrap = new JPanel(new GridBagLayout());
+        centerWrap.setOpaque(false);
+        GridBagConstraints cc = new GridBagConstraints();
+        cc.gridx = 0; cc.anchor = GridBagConstraints.WEST; cc.weighty = 1; cc.fill = GridBagConstraints.NONE;
+        centerWrap.add(contentPanel, cc);
 
-    private JPanel createMessageBodyWrapper(String content, int topPadding) {
-        JTextPane messageBody = new JTextPane();
-        messageBody.setEditable(false);
-        messageBody.setOpaque(false);
-        messageBody.setForeground(AppColors.TEXT_NORMAL);
-        messageBody.setFont(AppFonts.BODY);
-        messageBody.setBorder(BorderFactory.createEmptyBorder(topPadding, 0, 0, 0));
-        EmojiHelper.renderTextWithEmojis(messageBody, content);
+        GridBagConstraints gl = new GridBagConstraints();
+        gl.gridx = 2; gl.weightx = 1; gl.fill = GridBagConstraints.HORIZONTAL;
+        centerWrap.add(Box.createHorizontalGlue(), gl);
 
-        JPanel messageWrapper = new JPanel(new BorderLayout());
-        messageWrapper.setOpaque(false);
-        messageWrapper.setAlignmentX(Component.LEFT_ALIGNMENT);
-        messageWrapper.add(messageBody, BorderLayout.CENTER);
-
-        return messageWrapper;
+        add(west, BorderLayout.WEST);
+        add(centerWrap, BorderLayout.CENTER);
     }
 
     private void addEditedBadge() {
-        if (editedBadgeShown) return;
+        if (editedBadgeShown || headerRow == null) return; // tin gộp nhóm không có header
         JLabel editedBadge = new JLabel("(đã sửa)");
         editedBadge.setFont(AppFonts.TINY);
         editedBadge.setForeground(AppColors.TEXT_MUTED);
@@ -325,56 +325,91 @@ public class ChatMessageItem extends JPanel {
     }
 
     // ---------------------------------------------------------------
-    // Toolbar nổi (Sửa / Ghim / Xóa)
+    // Panel hover: [giờ (tin compact)] + nút "⋯" (bấm mở menu Sửa/Ghim/Xóa)
     // ---------------------------------------------------------------
-    private void buildToolbar() {
-        toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 2)) {
+    private void buildHoverBar() {
+        boolean canManage = network.PermissionCache.get().can(network.PermissionCache.MANAGE_MESSAGES);
+        boolean canEdit = isOwn && !isAttachment;
+        boolean canPin = canManage;
+        boolean canDelete = isOwn || canManage;
+        boolean hasActions = canEdit || canPin || canDelete;
+
+        // Tin compact (ẩn giờ ở header) sẽ hiện giờ nhỏ khi hover. Tin đầu nhóm đã có giờ ở header.
+        boolean showHoverTime = isConsecutive && message.getTimestamp() != null;
+        if (!hasActions && !showHoverTime) return; // không có gì để hiện → bỏ qua
+
+        toolbar = new JPanel(new FlowLayout(FlowLayout.CENTER, 4, 2)) {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(AppColors.BG_FLOATING);
-                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 8, 8);
+                java.awt.Shape shape = new RoundRectangle2D.Float(0, 0, getWidth() - 1, getHeight() - 1, 10, 10);
+                // Frosted khi bật wallpaper; ngược lại nền đặc BG_FLOATING như cũ.
+                if (gui.theme.WallpaperManager.get().isEnabled()) {
+                    gui.theme.WallpaperRenderer.paintFrosted(g2, this, shape, AppColors.MSG_BUBBLE);
+                } else {
+                    g2.setColor(AppColors.BG_FLOATING);
+                    g2.fill(shape);
+                }
                 g2.setColor(AppColors.BG_TERTIARY);
-                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 8, 8);
+                g2.draw(shape);
                 g2.dispose();
                 super.paintComponent(g);
             }
         };
         toolbar.setOpaque(false);
 
-        boolean canManage = network.PermissionCache.get().can(network.PermissionCache.MANAGE_MESSAGES);
-
-        // Sửa — chỉ cho tin text của chính mình (không áp dụng cho file đính kèm)
-        if (isOwn && !isAttachment) {
-            IconButton editBtn = new IconButton("✏", e -> startEditing());
-            editBtn.setToolTipText("Sửa");
-            toolbar.add(editBtn);
-        }
-        // Ghim — chỉ người có quyền quản lý tin nhắn
-        if (canManage) {
-            IconButton pinBtn = new IconButton("📌", e -> {
-                if (actions != null) actions.onPin(message);
-            });
-            pinBtn.setToolTipText("Ghim");
-            toolbar.add(pinBtn);
-        }
-        // Xóa — chủ tin hoặc người có quyền quản lý tin nhắn (backend vẫn kiểm tra lại)
-        if (isOwn || canManage) {
-            IconButton delBtn = new IconButton("🗑", e -> confirmDelete());
-            delBtn.setToolTipText("Xóa");
-            toolbar.add(delBtn);
+        // Giờ nhỏ (chỉ tin compact) — đặt bên trái nút "⋯".
+        if (showHoverTime) {
+            JLabel timeLabel = new JLabel(message.getTimestamp().format(TIME_FMT));
+            timeLabel.setFont(AppFonts.TINY);
+            timeLabel.setForeground(AppColors.TEXT_MUTED);
+            toolbar.add(timeLabel);
         }
 
-        JPanel wrap = new JPanel(new BorderLayout());
-        wrap.setOpaque(false);
-        wrap.add(toolbar, BorderLayout.NORTH);
+        if (hasActions) {
+            IconButton moreBtn = new IconButton("⋯", null);
+            moreBtn.setToolTipText("Tùy chọn");
+            moreBtn.addActionListener(e -> showActionMenu(moreBtn, canEdit, canPin, canDelete));
+            toolbar.add(moreBtn);
+        }
+
         toolbar.setVisible(false);
-        // Đặt sẵn chiều rộng bằng toolbar → bật/tắt khi hover không làm xô (reflow) nội dung tin.
-        if (toolbar.getComponentCount() > 0) {
-            wrap.setPreferredSize(new Dimension(toolbar.getPreferredSize().width, 0));
+        // Đặt toolbar NGAY CẠNH tin nhắn (gridx1). Khi ẩn, GridBag bỏ qua ⇒ không chiếm chỗ.
+        if (centerWrap != null) {
+            GridBagConstraints tc = new GridBagConstraints();
+            tc.gridx = 1; tc.weighty = 1; tc.fill = GridBagConstraints.NONE;
+            tc.anchor = GridBagConstraints.WEST;
+            tc.insets = new Insets(0, 8, 0, 0);
+            centerWrap.add(toolbar, tc);
         }
-        add(wrap, BorderLayout.EAST);
+    }
+
+    /** Mở menu hành động (Sửa/Ghim/Xóa) ngay dưới nút "⋯". */
+    private void showActionMenu(JComponent anchor, boolean canEdit, boolean canPin, boolean canDelete) {
+        JPopupMenu menu = new JPopupMenu();
+        if (canEdit) menu.add(actionItem("✏  Sửa", this::startEditing));
+        if (canPin) menu.add(actionItem("📌  Ghim", () -> { if (actions != null) actions.onPin(message); }));
+        if (canDelete) menu.add(actionItem("🗑  Xóa", this::confirmDelete));
+
+        menuOpen = true; // giữ toolbar hiện trong lúc menu mở (chuột rời item không ẩn nút)
+        menu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
+            @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {}
+            @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {
+                menuOpen = false;
+                if (!isHovered && toolbar != null) toolbar.setVisible(false);
+                repaint();
+            }
+            @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {}
+        });
+        menu.show(anchor, 0, anchor.getHeight());
+    }
+
+    private JMenuItem actionItem(String text, Runnable onClick) {
+        JMenuItem item = new JMenuItem(text);
+        item.setFont(AppFonts.BODY);
+        item.addActionListener(e -> onClick.run());
+        return item;
     }
 
     private void confirmDelete() {
@@ -459,7 +494,7 @@ public class ChatMessageItem extends JPanel {
     /** Cập nhật nội dung khi nhận broadcast EDIT từ server. */
     public void updateContent(String newContent, boolean edited) {
         if (messageBody != null) {
-            messageBody.setText(newContent);
+            EmojiHelper.renderTextWithEmojis(messageBody, newContent); // giữ render emoji
             messageBody.revalidate();
         }
         message.setContent(newContent);
@@ -507,7 +542,8 @@ public class ChatMessageItem extends JPanel {
     private void setHover(boolean hovered) {
         if (isHovered == hovered) return;
         isHovered = hovered;
-        if (toolbar != null && !isEditing) {
+        // Không ẩn toolbar khi menu "⋯" đang mở (để popup không bị đóng theo invoker).
+        if (toolbar != null && !isEditing && !(menuOpen && !hovered)) {
             toolbar.setVisible(hovered);
         }
         repaint();
@@ -518,21 +554,79 @@ public class ChatMessageItem extends JPanel {
         Graphics2D g2 = (Graphics2D) g.create();
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
+        // Box "frosted" ôm sát nội dung khi bật wallpaper → chữ dễ đọc, không bị hoạ tiết gây rối.
+        boolean wallpaper = !isSystemMsg && gui.theme.WallpaperManager.get().isEnabled();
+        Rectangle box = wallpaper ? contentBubbleRect() : null;
+        int arc = 16; // bo góc box tin nhắn
+        if (box != null) {
+            RoundRectangle2D shape = new RoundRectangle2D.Float(box.x, box.y, box.width, box.height, arc, arc);
+            gui.theme.WallpaperRenderer.paintFrosted(g2, this, shape, AppColors.MSG_BUBBLE);
+            // Viền bo góc mảnh cho box rõ nét
+            g2.setColor(AppColors.SEPARATOR);
+            g2.draw(shape);
+        }
+
+        // Hover/highlight: ôm content khi có box, ngược lại trải full-width như cũ.
+        int hx = box != null ? box.x : 6;
+        int hy = box != null ? box.y : 1;
+        int hw = box != null ? box.width : getWidth() - 12;
+        int hh = box != null ? box.height : getHeight() - 2;
         if (isHighlighted) {
             g2.setColor(AppColors.MSG_HIGHLIGHT_BG);
-            g2.fillRoundRect(6, 1, getWidth() - 12, getHeight() - 2, 12, 12);
+            g2.fillRoundRect(hx, hy, hw, hh, arc, arc);
         } else if ((isHovered || isEditing) && !isSystemMsg) {
             g2.setColor(AppColors.BG_MESSAGE_HOVER);
-            g2.fillRoundRect(6, 1, getWidth() - 12, getHeight() - 2, 12, 12);
+            g2.fillRoundRect(hx, hy, hw, hh, arc, arc);
         }
 
         g2.dispose();
         super.paintComponent(g);
     }
 
+    /** Chiều cao tối thiểu của box (tương xứng với toolbar Sửa/Ghim/Xoá). */
+    private static final int MIN_BUBBLE_H = 36;
+
+    /**
+     * Box ôm sát BỀ RỘNG nội dung, CHIỀU CAO bám theo hàng (đã có chiều cao tối thiểu ổn định)
+     * ⇒ box hiển thị đầy đủ ngay từ đầu, không bị cắt, không "nhảy" khi hover.
+     */
+    private Rectangle contentBubbleRect() {
+        if (contentPanel == null || centerWrap == null) return null;
+        int cw = contentPanel.getWidth();
+        if (cw <= 0) return null;
+        int padX = 12, vInset = 2;
+        int x = centerWrap.getX() + contentPanel.getX() - padX;
+        int h = Math.max(getHeight() - 2 * vInset, MIN_BUBBLE_H);
+        return new Rectangle(x, vInset, cw + 2 * padX, h);
+    }
+
+    @Override
+    public Dimension getPreferredSize() {
+        Dimension d = super.getPreferredSize();
+        // Bảo đảm hàng đủ cao để box hiển thị ĐẦY ĐỦ ngay từ đầu (không bị cắt) và toolbar
+        // hiện khi hover vẫn nằm gọn trong hàng ⇒ không "nhảy" kích thước lúc hover.
+        if (!isSystemMsg) d.height = Math.max(d.height, MIN_BUBBLE_H + 4);
+        return d;
+    }
+
     @Override
     public Dimension getMaximumSize() {
+        // Item phủ full chiều rộng (để nền hover trải đều); chỉ THÂN tin bị giới hạn (xem maxBubbleWidth).
         return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+    }
+
+    /**
+     * Bề rộng tối đa của THÂN tin nhắn ("giới hạn 2 biên"): bám theo viewport nhưng có trần.
+     * - Màn rộng → cap ở {@code scaled(720)} ⇒ luôn chừa lề phải, không chạm 2 biên.
+     * - Màn hẹp → dùng đúng bề rộng khả dụng ⇒ vẫn wrap, không tràn/cắt chữ.
+     */
+    int maxBubbleWidth() {
+        int cap = gui.theme.UiScale.get().scaled(720);
+        java.awt.Container vp = SwingUtilities.getAncestorOfClass(JViewport.class, this);
+        int reserve = gui.theme.UiScale.get().scaled(110); // avatar + khoảng cách + padding 2 bên
+        int avail = (vp != null ? vp.getWidth() : 600) - reserve;
+        if (avail <= 0) avail = 600; // fallback khi chưa gắn vào viewport
+        return Math.max(160, Math.min(avail, cap));
     }
 
     // ---------------------------------------------------------------
