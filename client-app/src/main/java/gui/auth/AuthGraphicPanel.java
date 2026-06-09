@@ -21,7 +21,7 @@ public class AuthGraphicPanel extends JPanel {
         logoIcon.setFont(AppFonts.EMOJI.deriveFont(28f));
         logoIcon.setForeground(Color.WHITE);
 
-        JLabel logoText = new JLabel("ChatSever");
+        JLabel logoText = new JLabel("ChatServer");
         logoText.setFont(AppFonts.HEADING_LG.deriveFont(Font.BOLD, 32f));
         logoText.setForeground(Color.WHITE);
 
@@ -29,7 +29,7 @@ public class AuthGraphicPanel extends JPanel {
         logoRow.add(logoText);
 
         JLabel desc = new JLabel("<html><div style='text-align: center; color: rgba(255,255,255,0.8); width: 250px;'>" 
-                + "Kết nối với bạn bè và cộng đồng.<br>Trải nghiệm mượt mà, tốc độ cao.</div></html>");
+                + "Connect with friends and communities.<br>Experience smooth, real-time messaging.</div></html>");
         desc.setFont(AppFonts.BODY);
         desc.setHorizontalAlignment(SwingConstants.CENTER);
         desc.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -68,14 +68,14 @@ public class AuthGraphicPanel extends JPanel {
         qrPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
         qrPanel.setOpaque(false);
 
-        JLabel qrTitle = new JLabel("Đăng nhập bằng mã QR");
+        JLabel qrTitle = new JLabel("Log in with QR Code");
         qrTitle.setFont(AppFonts.HEADING_MD);
         qrTitle.setForeground(Color.WHITE);
         qrTitle.setHorizontalAlignment(SwingConstants.CENTER);
         qrTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         JLabel qrDesc = new JLabel("<html><div style='text-align: center; color: rgba(255,255,255,0.7); width: 250px;'>" 
-                + "Quét mã bằng ứng dụng di động<br>để đăng nhập nhanh chóng.</div></html>");
+                + "Scan the code with the mobile app<br>to log in instantly.</div></html>");
         qrDesc.setFont(AppFonts.BODY_SM);
         qrDesc.setHorizontalAlignment(SwingConstants.CENTER);
         qrDesc.setAlignmentX(Component.CENTER_ALIGNMENT);

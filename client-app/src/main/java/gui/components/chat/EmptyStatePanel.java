@@ -17,7 +17,7 @@ public class EmptyStatePanel extends JPanel {
         mascot.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         // 2. The Welcome Text
-        JLabel title = new JLabel("Chào mừng trở lại!");
+        JLabel title = new JLabel("Welcome back!");
         title.setFont(AppFonts.HEADING_LG);
         title.setForeground(AppColors.TEXT_WHITE);
         title.setAlignmentX(Component.CENTER_ALIGNMENT);

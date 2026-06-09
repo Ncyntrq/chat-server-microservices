@@ -53,9 +53,7 @@ public class ServerIconItem extends JPanel {
             }
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (SwingUtilities.isRightMouseButton(e)) {
-                    if (onContextMenu != null) onContextMenu.run();
-                } else if (onClick != null) {
+                if (SwingUtilities.isLeftMouseButton(e) && onClick != null) {
                     onClick.run();
                 }
             }
