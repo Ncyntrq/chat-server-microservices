@@ -198,4 +198,35 @@ public class ChatHistoryView extends JScrollPane {
         }
         if (target != null) target.startEditing();
     }
+
+    /** Cuộn đến một tin nhắn cụ thể và chớp nháy màu nền. */
+    public void scrollToMessage(Long messageId) {
+        if (messageId == null) return;
+        ChatMessageItem item = messageItems.get(messageId);
+        if (item != null) {
+            SwingUtilities.invokeLater(() -> {
+                // Cuộn đến vị trí của tin nhắn
+                Rectangle bounds = item.getBounds();
+                chatHistoryPanel.scrollRectToVisible(bounds);
+                
+                // Hiệu ứng chớp nền nhẹ
+                Color oldColor = item.getBackground();
+                item.setBackground(new Color(88, 101, 242, 60)); // Blurple highlight
+                item.setOpaque(true);
+                item.repaint();
+                
+                Timer timer = new Timer(1500, e -> {
+                    item.setOpaque(false);
+                    item.setBackground(oldColor);
+                    item.repaint();
+                });
+                timer.setRepeats(false);
+                timer.start();
+            });
+        } else {
+            JOptionPane.showMessageDialog(this, 
+                "Tin nhắn này nằm ngoài lịch sử hiện tại. Vui lòng cuộn lên để tải thêm.", 
+                "Không tìm thấy", JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
 }

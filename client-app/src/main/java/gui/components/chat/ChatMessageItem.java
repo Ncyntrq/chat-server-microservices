@@ -47,7 +47,7 @@ public class ChatMessageItem extends JPanel {
     private JPanel headerRow;
     private JTextArea messageBody;
     private JPanel toolbar;
-    private boolean editedBadgeShown = false;
+    private JLabel editedBadgeLabel;
 
     /** Layout gọn cho tin nhắn liên tiếp cùng người gửi (gộp nhóm). */
     private final boolean isConsecutive;
@@ -189,8 +189,7 @@ public class ChatMessageItem extends JPanel {
             messageBody.setWrapStyleWord(true);
             messageBody.setEditable(false);
             messageBody.setOpaque(false);
-            messageBody.setForeground(AppColors.TEXT_NORMAL);
-            messageBody.setFont(AppFonts.BODY);
+            applyMessageStyle(messageBody, message.getContent());
             messageBody.setAlignmentX(Component.LEFT_ALIGNMENT);
             messageBody.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
             contentPanel.add(messageBody);
@@ -304,8 +303,7 @@ public class ChatMessageItem extends JPanel {
             messageBody.setWrapStyleWord(true);
             messageBody.setEditable(false);
             messageBody.setOpaque(false);
-            messageBody.setForeground(AppColors.TEXT_NORMAL);
-            messageBody.setFont(AppFonts.BODY);
+            applyMessageStyle(messageBody, message.getContent());
             messageBody.setAlignmentX(Component.LEFT_ALIGNMENT);
             messageBody.setBorder(BorderFactory.createEmptyBorder(3, 0, 0, 0));
             contentPanel.add(messageBody);
@@ -332,15 +330,26 @@ public class ChatMessageItem extends JPanel {
         return messageWrapper;
     }
 
+    private void applyMessageStyle(JTextArea textArea, String content) {
+        if ("Tin nhắn bị gỡ".equals(content)) {
+            textArea.setFont(AppFonts.BODY_ITALIC);
+            textArea.setForeground(AppColors.TEXT_MUTED);
+        } else {
+            textArea.setFont(AppFonts.BODY);
+            textArea.setForeground(AppColors.TEXT_NORMAL);
+        }
+    }
+
     private void addEditedBadge() {
-        if (editedBadgeShown) return;
-        JLabel editedBadge = new JLabel("(đã sửa)");
-        editedBadge.setFont(AppFonts.TINY);
-        editedBadge.setForeground(AppColors.TEXT_MUTED);
-        headerRow.add(editedBadge);
-        editedBadgeShown = true;
-        headerRow.revalidate();
-        headerRow.repaint();
+        if (editedBadgeLabel == null) {
+            editedBadgeLabel = new JLabel("(đã sửa)");
+            editedBadgeLabel.setFont(AppFonts.TINY);
+            editedBadgeLabel.setForeground(AppColors.TEXT_MUTED);
+            headerRow.add(editedBadgeLabel);
+            headerRow.revalidate();
+            headerRow.repaint();
+        }
+        editedBadgeLabel.setVisible(!"Tin nhắn bị gỡ".equals(message.getContent()));
     }
 
     // ---------------------------------------------------------------
@@ -427,7 +436,7 @@ public class ChatMessageItem extends JPanel {
     // ---------------------------------------------------------------
     /** Bắt đầu chỉnh sửa: thay messageBody bằng JTextField viền xanh. */
     public void startEditing() {
-        if (isEditing || isAttachment || messageBody == null || !isOwn) return;
+        if (isEditing || isAttachment || messageBody == null || !isOwn || "Tin nhắn bị gỡ".equals(message.getContent())) return;
         isEditing = true;
         if (toolbar != null) toolbar.setVisible(false);
 
@@ -495,12 +504,18 @@ public class ChatMessageItem extends JPanel {
     public void updateContent(String newContent, boolean edited) {
         if (messageBody != null) {
             messageBody.setText(newContent);
+            applyMessageStyle(messageBody, newContent);
             messageBody.revalidate();
         }
         message.setContent(newContent);
         if (edited) {
             message.setIsEdited(true);
             addEditedBadge();
+        } else if (editedBadgeLabel != null) {
+            editedBadgeLabel.setVisible(!"Tin nhắn bị gỡ".equals(newContent));
+        }
+        if ("Tin nhắn bị gỡ".equals(newContent) && toolbar != null) {
+            toolbar.setVisible(false);
         }
     }
 
@@ -550,7 +565,7 @@ public class ChatMessageItem extends JPanel {
     private void setHover(boolean hovered) {
         if (isHovered == hovered) return;
         isHovered = hovered;
-        if (toolbar != null && !isEditing) {
+        if (toolbar != null && !isEditing && !"Tin nhắn bị gỡ".equals(message.getContent())) {
             if (hovered) {
                 int tw = toolbar.getPreferredSize().width;
                 int th = toolbar.getPreferredSize().height;

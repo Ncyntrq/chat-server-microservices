@@ -97,7 +97,7 @@ public class ChatClientGUI extends JFrame {
         this.memberListView = new MemberListView(sessionUsername, this::openAssignRoleDialog, this::confirmKick);
         this.unreadSync = new UnreadCountSync(notificationApi, serverSidebar, channelSidebar, friendSidebar, sessionUsername);
         this.fileUpload = new FileUploadController(this, fileApi, wsClient, sessionUsername, this::toast, chatInput::setUploading);
-        this.pinController = new PinController(this, this::toast);
+        this.pinController = new PinController(this, this::toast, channelApi, () -> activeChannelId);
         this.outbound = new OutboundMessageController(wsClient, sessionUsername, this::toast);
 
         wireSidebarCallbacks();
@@ -167,8 +167,12 @@ public class ChatClientGUI extends JFrame {
         });
         toggleMiniBtn.setToolTipText("Bạn bè & Server đã tham gia");
 
+        IconButton searchBtn = new IconButton("🔍", e -> openSearchDialog());
+        searchBtn.setToolTipText("Tìm kiếm tin nhắn");
+
         JPanel headerRightWrap = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
         headerRightWrap.setOpaque(false);
+        headerRightWrap.add(searchBtn);
         headerRightWrap.add(pinBtn);
         headerRightWrap.add(toggleMiniBtn);
 
@@ -542,5 +546,13 @@ public class ChatClientGUI extends JFrame {
             channelHeaderPanel.revalidate();
             channelHeaderPanel.repaint();
         }
+    }
+
+    private void openSearchDialog() {
+        Long chId = activeChannelId != -1 ? activeChannelId : null;
+        Long svId = activeServerId != -1 ? activeServerId : null;
+        new gui.components.dialogs.SearchDialog(this, channelApi, chId, svId, msgId -> {
+            chatHistoryView.scrollToMessage(msgId);
+        }).setVisible(true);
     }
 }

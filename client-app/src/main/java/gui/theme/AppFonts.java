@@ -24,6 +24,7 @@ public final class AppFonts {
     // Body fonts
     public static final Font BODY = new Font(PRIMARY_FAMILY, Font.PLAIN, 14);
     public static final Font BODY_BOLD = new Font(PRIMARY_FAMILY, Font.BOLD, 14);
+    public static final Font BODY_ITALIC = new Font(PRIMARY_FAMILY, Font.ITALIC, 14);
     public static final Font BODY_SM = new Font(PRIMARY_FAMILY, Font.PLAIN, 13);
 
     // Caption / Meta
