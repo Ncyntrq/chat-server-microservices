@@ -1,101 +1,212 @@
 package gui.components.friends;
 
-import gui.components.FormField;
-import gui.components.PrimaryButton;
 import gui.theme.AppColors;
 import gui.theme.AppFonts;
+import network.FriendApiClient;
+import network.UserProfileApiClient;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.geom.RoundRectangle2D;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Consumer;
 
+/**
+ * Dialog "Thêm bạn": tìm người dùng theo username/displayName (debounce ~300ms),
+ * hiển thị trạng thái quan hệ và nút hành động phù hợp (Kết bạn / Chấp nhận / Bạn bè).
+ */
 public class AddFriendDialog extends JDialog {
 
-    public AddFriendDialog(Window owner, java.util.function.Consumer<String> onSendRequest) {
-        super(owner, ModalityType.APPLICATION_MODAL);
-        setUndecorated(true);
-        setSize(440, 280);
+    private final FriendApiClient friendApi = new FriendApiClient();
+    private final UserProfileApiClient userApi = new UserProfileApiClient();
+    private final String sessionUsername;
+    private final Consumer<String> onFriendAction;
+
+    private final JTextField searchField = new JTextField();
+    private final JPanel resultsPanel = new JPanel();
+    private final Timer debounce;
+
+    private Set<String> friends = Set.of();
+    private Set<String> incomingPending = Set.of();
+
+    public AddFriendDialog(JFrame owner, String sessionUsername, Consumer<String> onFriendAction) {
+        super(owner, "Thêm bạn", false);
+        this.sessionUsername = sessionUsername;
+        this.onFriendAction = onFriendAction;
+
+        this.debounce = new Timer(300, e -> runSearch());
+        this.debounce.setRepeats(false);
+
+        setSize(420, 500);
         setLocationRelativeTo(owner);
-        setShape(new RoundRectangle2D.Double(0, 0, getWidth(), getHeight(), 16, 16));
+        setLayout(new BorderLayout());
+        getContentPane().setBackground(AppColors.BG_PRIMARY);
 
-        JPanel root = new JPanel();
-        root.setLayout(new BoxLayout(root, BoxLayout.Y_AXIS));
-        root.setBackground(AppColors.BG_PRIMARY);
-        root.setBorder(BorderFactory.createEmptyBorder(24, 32, 24, 32));
+        add(buildHeader(), BorderLayout.NORTH);
+        resultsPanel.setLayout(new BoxLayout(resultsPanel, BoxLayout.Y_AXIS));
+        resultsPanel.setBackground(AppColors.BG_PRIMARY);
+        JScrollPane scroll = new JScrollPane(resultsPanel);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        gui.theme.ThinScrollBarUI.apply(scroll);
+        add(scroll, BorderLayout.CENTER);
 
-        // Header
-        JPanel headerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        headerPanel.setOpaque(false);
-        JLabel title = new JLabel("Thêm Bạn");
-        title.setFont(AppFonts.HEADING_LG);
-        title.setForeground(AppColors.TEXT_HEADER);
-        headerPanel.add(title);
-        
-        // Close Button
-        JButton closeBtn = new JButton("✕");
-        closeBtn.setFont(new Font("SansSerif", Font.BOLD, 18));
-        closeBtn.setForeground(AppColors.TEXT_MUTED);
-        closeBtn.setFocusPainted(false);
-        closeBtn.setContentAreaFilled(false);
-        closeBtn.setBorderPainted(false);
-        closeBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        closeBtn.addActionListener(e -> dispose());
-        closeBtn.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseEntered(java.awt.event.MouseEvent evt) {
-                closeBtn.setForeground(Color.WHITE);
+        showHint("Nhập username hoặc tên hiển thị để tìm bạn…");
+        loadRelationships();
+        SwingUtilities.invokeLater(searchField::requestFocusInWindow);
+    }
+
+    private JPanel buildHeader() {
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(AppColors.BG_PRIMARY);
+        header.setBorder(BorderFactory.createEmptyBorder(12, 14, 8, 14));
+        searchField.setFont(AppFonts.BODY);
+        searchField.setBackground(AppColors.BG_TERTIARY);
+        searchField.setForeground(AppColors.TEXT_NORMAL);
+        searchField.setCaretColor(AppColors.TEXT_WHITE);
+        searchField.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
+        searchField.getDocument().addDocumentListener(new SimpleDocListener(debounce::restart));
+        header.add(searchField, BorderLayout.CENTER);
+        return header;
+    }
+
+    /** Nạp danh sách bạn + lời mời đến để xác định trạng thái quan hệ. */
+    private void loadRelationships() {
+        new SwingWorker<Set<String>[], Void>() {
+            @Override @SuppressWarnings("unchecked")
+            protected Set<String>[] doInBackground() {
+                return new Set[]{ Set.copyOf(friendApi.getFriends()), Set.copyOf(friendApi.getPendingRequests()) };
             }
-            public void mouseExited(java.awt.event.MouseEvent evt) {
-                closeBtn.setForeground(AppColors.TEXT_MUTED);
+            @Override protected void done() {
+                try {
+                    Set<String>[] r = get();
+                    friends = r[0];
+                    incomingPending = r[1];
+                    // Render lại để nút phản ánh đúng trạng thái nếu kết quả đã hiển thị trước đó
+                    if (searchField.getText().trim().length() >= 2) runSearch();
+                } catch (Exception ignore) {
+                    // giữ nguyên các set trước đó nếu lỗi
+                }
             }
-        });
-        
-        JPanel topRow = new JPanel(new BorderLayout());
-        topRow.setOpaque(false);
-        topRow.setAlignmentX(Component.LEFT_ALIGNMENT);
-        topRow.add(headerPanel, BorderLayout.CENTER);
-        topRow.add(closeBtn, BorderLayout.EAST);
-        
-        JLabel desc = new JLabel("Bạn có thể thêm bạn bằng Username.");
-        desc.setFont(AppFonts.BODY);
-        desc.setForeground(AppColors.TEXT_MUTED);
-        desc.setAlignmentX(Component.LEFT_ALIGNMENT);
+        }.execute();
+    }
 
-        FormField usernameField = new FormField("USERNAME", "Nhập username kết bạn", false);
-        usernameField.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        JLabel statusLabel = new JLabel(" ");
-        statusLabel.setFont(AppFonts.BODY_SM);
-        statusLabel.setForeground(AppColors.DANGER);
-        statusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        PrimaryButton sendBtn = new PrimaryButton("Gửi Yêu Cầu Kết Bạn", e -> {
-            String uname = usernameField.getText().trim();
-            if (uname.isEmpty()) {
-                statusLabel.setText("Vui lòng nhập username.");
-                return;
+    private void runSearch() {
+        String keyword = searchField.getText().trim();
+        if (keyword.length() < 2) { showHint("Nhập ít nhất 2 ký tự để tìm kiếm…"); return; }
+        showHint("Đang tìm…");
+        new SwingWorker<List<Map<String, Object>>, Void>() {
+            @Override protected List<Map<String, Object>> doInBackground() { return userApi.searchUsers(keyword); }
+            @Override protected void done() {
+                try { renderResults(get()); }
+                catch (Exception ex) {
+                    Throwable c = ex.getCause() != null ? ex.getCause() : ex;
+                    showHint("Lỗi tìm kiếm: " + c.getMessage());
+                }
             }
-            dispose();
-            if (onSendRequest != null) {
-                onSendRequest.accept(uname);
+        }.execute();
+    }
+
+    private void renderResults(List<Map<String, Object>> users) {
+        resultsPanel.removeAll();
+        if (users.isEmpty()) { showHint("Không tìm thấy người dùng nào."); return; }
+        for (Map<String, Object> u : users) {
+            String username = String.valueOf(u.get("username"));
+            if (username.equalsIgnoreCase(sessionUsername)) continue; // phòng hờ
+            resultsPanel.add(buildUserRow(username, str(u.get("displayName"))));
+        }
+        resultsPanel.revalidate();
+        resultsPanel.repaint();
+    }
+
+    private JComponent buildUserRow(String username, String displayName) {
+        JPanel row = new JPanel(new BorderLayout(8, 0));
+        row.setBackground(AppColors.BG_PRIMARY);
+        row.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, AppColors.SEPARATOR),
+                BorderFactory.createEmptyBorder(8, 14, 8, 14)));
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 56));
+
+        String name = (displayName != null && !displayName.isBlank()) ? displayName : username;
+        JLabel label = new JLabel("<html><b>" + esc(name) + "</b><br><span style='color:#8B92A0;'>@"
+                + esc(username) + "</span></html>");
+        label.setFont(AppFonts.BODY);
+        label.setForeground(AppColors.TEXT_NORMAL);
+        row.add(label, BorderLayout.CENTER);
+        row.add(buildActionButton(username), BorderLayout.EAST);
+        return row;
+    }
+
+    private JButton buildActionButton(String username) {
+        if (friends.contains(username)) return actionButton("Bạn bè", AppColors.STATUS_OFFLINE, null);
+        if (incomingPending.contains(username)) {
+            return actionButton("Chấp nhận", AppColors.SUCCESS, () -> doAction(username, true));
+        }
+        return actionButton("Kết bạn", AppColors.BRAND_PRIMARY, () -> doAction(username, false));
+    }
+
+    private void doAction(String username, boolean accept) {
+        new SwingWorker<Void, Void>() {
+            Exception error;
+            @Override protected Void doInBackground() {
+                try { if (accept) friendApi.acceptRequest(username); else friendApi.sendRequest(username); }
+                catch (Exception ex) { error = ex; }
+                return null;
             }
-        });
-        sendBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
+            @Override protected void done() {
+                if (error != null) {
+                    JOptionPane.showMessageDialog(AddFriendDialog.this, "Lỗi: " + error.getMessage());
+                    return;
+                }
+                if (onFriendAction != null) onFriendAction.accept(username);
+                loadRelationships();
+                runSearch(); // refresh trạng thái nút
+            }
+        }.execute();
+    }
 
-        usernameField.onEnter(sendBtn::doClick);
+    private JButton actionButton(String text, Color bg, Runnable onClick) {
+        JButton b = new JButton(text);
+        b.setForeground(Color.WHITE);
+        b.setBackground(bg);
+        b.setOpaque(true);
+        b.setBorderPainted(false);
+        b.setFocusPainted(false);
+        b.setFont(AppFonts.CAPTION_BOLD);
+        b.setBorder(BorderFactory.createEmptyBorder(5, 12, 5, 12));
+        if (onClick != null) {
+            b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            b.addActionListener(e -> onClick.run());
+        } else {
+            b.setEnabled(false);
+        }
+        return b;
+    }
 
-        root.add(topRow);
-        root.add(Box.createVerticalStrut(10));
-        root.add(desc);
-        root.add(Box.createVerticalStrut(24));
-        root.add(usernameField);
-        root.add(Box.createVerticalStrut(4));
-        root.add(statusLabel);
-        root.add(Box.createVerticalStrut(12));
-        root.add(sendBtn);
-        root.add(Box.createVerticalGlue());
+    private void showHint(String text) {
+        resultsPanel.removeAll();
+        JLabel hint = new JLabel(text);
+        hint.setFont(AppFonts.BODY);
+        hint.setForeground(AppColors.TEXT_MUTED);
+        hint.setBorder(BorderFactory.createEmptyBorder(16, 14, 16, 14));
+        hint.setAlignmentX(Component.LEFT_ALIGNMENT);
+        resultsPanel.add(hint);
+        resultsPanel.revalidate();
+        resultsPanel.repaint();
+    }
 
-        setContentPane(root);
-        
-        SwingUtilities.invokeLater(() -> usernameField.getField().requestFocusInWindow());
+    private static String str(Object o) { return o == null ? null : o.toString(); }
+
+    private static String esc(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
+    private record SimpleDocListener(Runnable onChange) implements javax.swing.event.DocumentListener {
+        @Override public void insertUpdate(javax.swing.event.DocumentEvent e) { onChange.run(); }
+        @Override public void removeUpdate(javax.swing.event.DocumentEvent e) { onChange.run(); }
+        @Override public void changedUpdate(javax.swing.event.DocumentEvent e) { onChange.run(); }
     }
 }

@@ -1,6 +1,7 @@
 package gui.chat;
 
 import gui.components.chat.ChatMessageItem;
+import gui.components.chat.VerticalScrollablePanel;
 import gui.theme.AppColors;
 import gui.theme.AppFonts;
 import gui.theme.ThinScrollBarUI;
@@ -9,6 +10,7 @@ import com.chatsever.common.enums.MessageType;
 
 import javax.swing.*;
 import java.awt.*;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -28,6 +30,12 @@ public class ChatHistoryView extends JScrollPane {
     // Theo dõi item theo messageId để cập nhật/xóa tại chỗ khi nhận EDIT/DELETE
     private final Map<Long, ChatMessageItem> messageItems = new LinkedHashMap<>();
     private String lastSender = null;
+    private LocalDateTime lastTimestamp = null;
+    /** Tin cùng người trong khoảng này → gộp nhóm (chỉ tin đầu hiện giờ). */
+    private static final long GROUP_GAP_MINUTES = 5;
+    /** Cách tin trước ≥ ngưỡng này (phút) → chừa khoảng trống rộng hơn. */
+    private static final long BIG_GAP_MINUTES = 60;
+    private static final int BIG_GAP_PX = 18;
     private boolean showingPlaceholder = false;
     private String placeholderText = "Chọn một kênh hoặc người bạn để bắt đầu trò chuyện";
 
@@ -35,38 +43,43 @@ public class ChatHistoryView extends JScrollPane {
         this.sessionUsername = sessionUsername;
         this.messageActions = messageActions;
 
-        chatHistoryPanel = new JPanel();
+        chatHistoryPanel = new VerticalScrollablePanel(); // bám bề rộng viewport ⇒ tin tự wrap, không cuộn ngang
         chatHistoryPanel.setLayout(new BoxLayout(chatHistoryPanel, BoxLayout.Y_AXIS));
-        chatHistoryPanel.setBackground(AppColors.BG_PRIMARY);
+        chatHistoryPanel.setOpaque(false); // để lộ hoạ tiết nền vẽ ở paintComponent
         chatHistoryPanel.add(Box.createVerticalGlue());
 
-        floatingLayer = new JPanel(null);
-        floatingLayer.setOpaque(false);
-
-        JPanel viewportPanel = new JPanel() {
-            @Override
-            public boolean isOptimizedDrawingEnabled() {
-                return false;
-            }
-        };
-        viewportPanel.setLayout(new OverlayLayout(viewportPanel));
-        
-        floatingLayer.setAlignmentX(0f);
-        floatingLayer.setAlignmentY(0f);
-        chatHistoryPanel.setAlignmentX(0f);
-        chatHistoryPanel.setAlignmentY(0f);
-
-        viewportPanel.add(floatingLayer);
-        viewportPanel.add(chatHistoryPanel);
-
-        setViewportView(viewportPanel);
+        setViewportView(chatHistoryPanel);
+        getViewport().setOpaque(false); // viewport trong suốt → nền wallpaper hiện xuyên qua
         setBorder(BorderFactory.createEmptyBorder());
         getVerticalScrollBar().setUnitIncrement(16);
         ThinScrollBarUI.apply(this);
     }
 
+    /**
+     * Vẽ nền vùng chat: hoạ tiết wallpaper (gradient + pattern theo theme) nếu bật,
+     * ngược lại nền phẳng BG_PRIMARY. Nền cố định, không cuộn theo tin nhắn.
+     */
+    @Override
+    protected void paintComponent(java.awt.Graphics g) {
+        java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+        gui.theme.WallpaperManager wm = gui.theme.WallpaperManager.get();
+        if (wm.isEnabled()) {
+            gui.theme.WallpaperRenderer.paint(g2, getWidth(), getHeight(),
+                    gui.theme.ThemeManager.get().current(), wm.activePatternId());
+        } else {
+            g2.setColor(AppColors.BG_PRIMARY);
+            g2.fillRect(0, 0, getWidth(), getHeight());
+        }
+        g2.dispose();
+    }
+
     /** Thêm 1 tin nhắn vào cuối danh sách và cuộn xuống. */
     public void appendMessage(MessageDTO message) {
+        // Tính TRƯỚC khi thêm: chỉ tự cuộn xuống nếu đang ở đáy hoặc là tin của chính mình
+        // ⇒ không cướp vị trí khi user đang đọc lịch sử.
+        boolean own = sessionUsername != null && sessionUsername.equals(message.getSender());
+        boolean stickToBottom = own || isAtBottom();
+
         if (showingPlaceholder) {
             chatHistoryPanel.removeAll();
             chatHistoryPanel.add(Box.createVerticalGlue());
@@ -77,21 +90,37 @@ public class ChatHistoryView extends JScrollPane {
                 message.getContent().contains("@" + sessionUsername);
 
         boolean isConsecutive = false;
+        boolean bigGap = false; // cách tin trước ≥ 1 giờ → chừa khoảng rộng hơn
         if (message.getType() != MessageType.SYSTEM && message.getType() != MessageType.JOIN
                 && message.getType() != MessageType.LEAVE && message.getType() != MessageType.ERROR
                 && !"SYSTEM".equals(message.getSender())) {
-            if (message.getSender() != null && message.getSender().equals(lastSender)) {
-                isConsecutive = true;
+            LocalDateTime ts = message.getTimestamp();
+            if (lastTimestamp != null && ts != null) {
+                long gapMin = Math.abs(Duration.between(lastTimestamp, ts).toMinutes());
+                // Gộp nhóm khi: CÙNG người gửi VÀ cách tin trước ≤ 5 phút (chỉ tin đầu hiện giờ).
+                if (message.getSender() != null && message.getSender().equals(lastSender)
+                        && gapMin < GROUP_GAP_MINUTES) {
+                    isConsecutive = true;
+                }
+                bigGap = gapMin >= BIG_GAP_MINUTES;
             }
             lastSender = message.getSender();
+            lastTimestamp = ts;
         } else {
             lastSender = null;
+            lastTimestamp = null;
         }
 
         ChatMessageItem item = new ChatMessageItem(message, isHighlighted, sessionUsername, messageActions, isConsecutive, floatingLayer);
 
         int insertIndex = chatHistoryPanel.getComponentCount() - 1;
+        // Cách tin trước ≥ 1 giờ → chèn khoảng trống rộng hơn phía trên tin này.
+        if (bigGap) {
+            chatHistoryPanel.add(Box.createVerticalStrut(BIG_GAP_PX), insertIndex);
+            insertIndex++;
+        }
         chatHistoryPanel.add(item, insertIndex);
+        chatHistoryPanel.add(Box.createVerticalStrut(3), insertIndex + 1);
 
         if (message.getMessageId() != null) {
             messageItems.put(message.getMessageId(), item);
@@ -100,10 +129,18 @@ public class ChatHistoryView extends JScrollPane {
         chatHistoryPanel.revalidate();
         chatHistoryPanel.repaint();
 
-        SwingUtilities.invokeLater(() -> {
-            JScrollBar vertical = getVerticalScrollBar();
-            vertical.setValue(vertical.getMaximum());
-        });
+        if (stickToBottom) {
+            SwingUtilities.invokeLater(() -> {
+                JScrollBar vertical = getVerticalScrollBar();
+                vertical.setValue(vertical.getMaximum());
+            });
+        }
+    }
+
+    /** Đang ở (gần) đáy danh sách? Ngưỡng ~40px để bỏ qua sai số layout. */
+    private boolean isAtBottom() {
+        JScrollBar v = getVerticalScrollBar();
+        return v.getValue() + v.getVisibleAmount() >= v.getMaximum() - 40;
     }
 
     /** Thêm 1 tin hệ thống (SYSTEM) vào luồng chat. */
@@ -121,6 +158,7 @@ public class ChatHistoryView extends JScrollPane {
     public void clear() {
         chatHistoryPanel.removeAll();
         lastSender = null;
+        lastTimestamp = null;
         messageItems.clear();
         showingPlaceholder = true;
         chatHistoryPanel.add(Box.createVerticalGlue());
@@ -185,6 +223,47 @@ public class ChatHistoryView extends JScrollPane {
         chatHistoryPanel.repaint();
         floatingLayer.revalidate();
         floatingLayer.repaint();
+    }
+
+    /** Tin nhắn có nằm trong phần đã tải hiện tại không? */
+    public boolean hasMessage(Long messageId) {
+        return messageId != null && messageItems.containsKey(messageId);
+    }
+
+    /**
+     * Cuộn tới tin nhắn theo messageId và nháy viền highlight để định vị.
+     * Trả về false nếu tin nhắn chưa được tải (caller có thể fallback).
+     */
+    public boolean scrollToMessage(Long messageId) {
+        if (messageId == null) return false;
+        ChatMessageItem item = messageItems.get(messageId);
+        if (item == null) return false;
+
+        SwingUtilities.invokeLater(() -> {
+            Rectangle bounds = item.getBounds();
+            // Căn item vào giữa vùng nhìn nếu có thể
+            Rectangle view = new Rectangle(bounds.x, Math.max(0, bounds.y - 40),
+                    bounds.width, bounds.height + 80);
+            chatHistoryPanel.scrollRectToVisible(view);
+            flashHighlight(item);
+        });
+        return true;
+    }
+
+    /** Nháy nền highlight tạm thời ~1.2s để người dùng định vị tin nhắn. */
+    private void flashHighlight(ChatMessageItem item) {
+        Color original = item.getBackground();
+        boolean wasOpaque = item.isOpaque();
+        item.setOpaque(true);
+        item.setBackground(AppColors.MSG_HIGHLIGHT_BG);
+        item.repaint();
+        Timer timer = new Timer(1200, e -> {
+            item.setBackground(original);
+            item.setOpaque(wasOpaque);
+            item.repaint();
+        });
+        timer.setRepeats(false);
+        timer.start();
     }
 
     /** Mở chỉnh sửa tin nhắn cuối cùng của chính mình trong kênh đang mở. */

@@ -87,7 +87,12 @@ public class ChatClientGUI extends JFrame {
 
     public ChatClientGUI(String sessionUsername) {
         setTitle("Chat Server v2.0 — " + sessionUsername);
-        setSize(1200, 750);
+        // Mở theo ~80% màn hình (cap 1200×750, sàn 900×600) để hợp mọi kích thước/độ phân giải.
+        Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+        int w = Math.max(900, Math.min(1200, (int) (screen.width * 0.8)));
+        int h = Math.max(600, Math.min(750, (int) (screen.height * 0.8)));
+        setSize(w, h);
+        setMinimumSize(new Dimension(820, 560)); // chặn layout vỡ/che ô nhập khi thu nhỏ
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
@@ -128,6 +133,42 @@ public class ChatClientGUI extends JFrame {
         addWindowListener(new WindowAdapter() {
             @Override public void windowClosing(WindowEvent e) { wsClient.close(); }
         });
+
+        installZoomKeybindings();
+    }
+
+    // ---------------------------------------------------------------
+    // Zoom toàn cục (Cmd/Ctrl +, -, 0) — phóng/thu chữ + spacing đồng đều
+    // ---------------------------------------------------------------
+    private void installZoomKeybindings() {
+        JRootPane root = getRootPane();
+        InputMap im = root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap am = root.getActionMap();
+        int mask = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx(); // Cmd@mac, Ctrl@win/linux
+
+        im.put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_EQUALS, mask), "zoomIn");
+        im.put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_PLUS, mask), "zoomIn");
+        im.put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ADD, mask), "zoomIn");
+        im.put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_MINUS, mask), "zoomOut");
+        im.put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_SUBTRACT, mask), "zoomOut");
+        im.put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_0, mask), "zoomReset");
+
+        am.put("zoomIn", zoomAction(() -> gui.theme.UiScale.get().increase()));
+        am.put("zoomOut", zoomAction(() -> gui.theme.UiScale.get().decrease()));
+        am.put("zoomReset", zoomAction(() -> gui.theme.UiScale.get().reset()));
+    }
+
+    private Action zoomAction(java.util.function.DoubleSupplier change) {
+        return new AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                double factor = change.getAsDouble();
+                gui.theme.AppFonts.applyGlobalScale();
+                SwingUtilities.updateComponentTreeUI(ChatClientGUI.this);
+                revalidate();
+                repaint();
+                Toast.info(ChatClientGUI.this, "Thu phóng: " + Math.round(factor * 100) + "%");
+            }
+        };
     }
 
     /** Gắn các callback chuyển server/channel/bạn bè + broadcast thay đổi qua WS. */
@@ -157,26 +198,15 @@ public class ChatClientGUI extends JFrame {
         channelTitleLabel.setFont(AppFonts.BODY_BOLD);
         channelTitleLabel.setForeground(AppColors.TEXT_HEADER);
 
+        IconButton searchBtn = new IconButton("🔍", e -> openMessageSearch());
+        searchBtn.setToolTipText("Tìm kiếm tin nhắn");
+
         IconButton pinBtn = new IconButton("📌", e -> pinController.openDialog());
-        pinBtn.setToolTipText("Pinned messages");
-
-        IconButton toggleMiniBtn = new IconButton("👥", e -> {
-            boolean show = !miniSidebar.isVisible();
-            miniSidebar.setVisible(show);
-            if (show) miniSidebar.refresh();
-            eastContainer.revalidate();
-            eastContainer.repaint();
-        });
-        toggleMiniBtn.setToolTipText("Friends & Servers");
-
-        IconButton searchBtn = new IconButton("🔍", e -> openSearchDialog());
-        searchBtn.setToolTipText("Search messages");
-
-        JPanel headerRightWrap = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
-        headerRightWrap.setOpaque(false);
-        headerRightWrap.add(searchBtn);
-        headerRightWrap.add(pinBtn);
-        headerRightWrap.add(toggleMiniBtn);
+        pinBtn.setToolTipText("Tin nhắn đã ghim");
+        JPanel pinWrap = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        pinWrap.setOpaque(false);
+        pinWrap.add(searchBtn);
+        pinWrap.add(pinBtn);
 
         channelHeaderPanel = new JPanel(new BorderLayout());
         channelHeaderPanel.setBackground(AppColors.BG_PRIMARY);
@@ -208,10 +238,10 @@ public class ChatClientGUI extends JFrame {
 
         chatInput.setVisible(false); // Ẩn ban đầu
         chatInput.getSendButton().addActionListener(e -> sendChatFromInput());
-        chatInput.getInputField().addActionListener(e -> sendChatFromInput());
+        chatInput.setOnSend(this::sendChatFromInput); // Enter = gửi (Shift+Enter xuống dòng)
         chatInput.setOnAttach(() -> fileUpload.chooseAndSend(activeChannelId, activeServerId, activePrivateUser));
         // Mũi tên Lên khi ô nhập trống → sửa nhanh tin nhắn cuối của chính mình
-        chatInput.getInputField().addKeyListener(new java.awt.event.KeyAdapter() {
+        chatInput.getInputArea().addKeyListener(new java.awt.event.KeyAdapter() {
             @Override
             public void keyPressed(java.awt.event.KeyEvent e) {
                 if (e.getKeyCode() == java.awt.event.KeyEvent.VK_UP && chatInput.getMessageText().isEmpty()) {
@@ -240,6 +270,9 @@ public class ChatClientGUI extends JFrame {
         bottomPanel.add(inputWrapper, BorderLayout.CENTER);
         return bottomPanel;
     }
+
+    /** Vẽ lại nền vùng chat sau khi đổi hoạ tiết wallpaper (không cần rebuild cửa sổ). */
+    public void refreshChatBackground() { chatHistoryView.repaint(); }
 
     /** Bắt đầu phiên: load servers, presence, connect WS, load trang chủ. */
     public void startSession() {
@@ -571,6 +604,57 @@ public class ChatClientGUI extends JFrame {
     // ---------------------------------------------------------------
     // Sửa / Xóa / Ghim tin nhắn
     // ---------------------------------------------------------------
+
+    // ---------------------------------------------------------------
+    // Tìm kiếm tin nhắn
+    // ---------------------------------------------------------------
+
+    /** Mở dialog tìm kiếm tin nhắn với phạm vi theo ngữ cảnh đang mở. */
+    private void openMessageSearch() {
+        gui.components.chat.MessageSearchPanel panel =
+                new gui.components.chat.MessageSearchPanel(this, activeChannelId, activePrivateUser, this::jumpToSearchResult);
+        panel.setVisible(true);
+    }
+
+    /** Điều hướng + cuộn tới tin nhắn từ kết quả tìm kiếm. */
+    private void jumpToSearchResult(MessageDTO m) {
+        boolean isPrivate = m.getChannelId() == null && m.getReceiver() != null;
+        if (isPrivate) {
+            String other = sessionUsername.equals(m.getSender()) ? m.getReceiver() : m.getSender();
+            if (other == null) { tryScrollOrToast(m.getMessageId()); return; }
+            if (!other.equals(activePrivateUser)) {
+                openDirectMessage(other);
+                scrollAfterLoad(m.getMessageId());
+            } else {
+                tryScrollOrToast(m.getMessageId());
+            }
+            return;
+        }
+        if (m.getChannelId() != null && m.getChannelId() == activeChannelId) {
+            tryScrollOrToast(m.getMessageId());
+        } else {
+            Toast.info(this, "Tin nhắn thuộc kênh khác — hãy mở kênh đó rồi tìm lại.");
+        }
+    }
+
+    private void tryScrollOrToast(Long messageId) {
+        if (!chatHistoryView.scrollToMessage(messageId)) {
+            Toast.info(this, "Tin nhắn không nằm trong phần lịch sử đã tải.");
+        }
+    }
+
+    /** DM vừa mở nạp lịch sử bất đồng bộ → thử cuộn vài lần tới khi tin nhắn có mặt. */
+    private void scrollAfterLoad(Long messageId) {
+        if (messageId == null) return;
+        final int[] tries = {0};
+        Timer t = new Timer(200, null);
+        t.addActionListener(e -> {
+            if (chatHistoryView.scrollToMessage(messageId) || ++tries[0] >= 15) {
+                t.stop();
+            }
+        });
+        t.start();
+    }
 
     /** Cập nhật tiêu đề header vùng chat; title == null sẽ ẩn header. */
     private void setChannelHeader(String title) {

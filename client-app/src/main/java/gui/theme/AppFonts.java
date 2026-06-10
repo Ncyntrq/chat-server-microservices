@@ -1,10 +1,17 @@
 package gui.theme;
 
+import com.formdev.flatlaf.FlatLaf;
+
+import javax.swing.UIManager;
 import java.awt.*;
 
 /**
  * Centralized font definitions.
  * Uses system fonts that handle Vietnamese and emoji well.
+ *
+ * Các Font KHÔNG còn là hằng {@code final}: chúng được dựng lại từ base size * {@link UiScale}
+ * mỗi khi gọi {@link #rescale()} (sau khi người dùng zoom). Code vẫn gọi {@code AppFonts.BODY}
+ * như trước — chỉ cần rebuild UI sau khi rescale để các component đọc lại Font mới.
  */
 public final class AppFonts {
 
@@ -16,31 +23,70 @@ public final class AppFonts {
             "Segoe UI Emoji", "Noto Color Emoji", "Apple Color Emoji", "SansSerif"
     );
 
+    // Base sizes (px @ scale 1.0) — nguồn duy nhất để tính lại khi zoom.
+    private static final int SZ_HEADING_LG = 20, SZ_HEADING_MD = 16, SZ_HEADING_SM = 13;
+    private static final int SZ_BODY = 14, SZ_BODY_BOLD = 14, SZ_BODY_SM = 13;
+    private static final int SZ_CAPTION = 12, SZ_CAPTION_BOLD = 11, SZ_TINY = 10;
+    private static final int SZ_EMOJI = 18, SZ_EMOJI_SM = 14;
+    private static final int SZ_AVATAR = 17, SZ_AVATAR_SM = 13;
+
     // Heading fonts
-    public static final Font HEADING_LG = new Font(PRIMARY_FAMILY, Font.BOLD, 20);
-    public static final Font HEADING_MD = new Font(PRIMARY_FAMILY, Font.BOLD, 16);
-    public static final Font HEADING_SM = new Font(PRIMARY_FAMILY, Font.BOLD, 13);
-
+    public static Font HEADING_LG, HEADING_MD, HEADING_SM;
     // Body fonts
-    public static final Font BODY = new Font(PRIMARY_FAMILY, Font.PLAIN, 14);
-    public static final Font BODY_BOLD = new Font(PRIMARY_FAMILY, Font.BOLD, 14);
-    public static final Font BODY_ITALIC = new Font(PRIMARY_FAMILY, Font.ITALIC, 14);
-    public static final Font BODY_SM = new Font(PRIMARY_FAMILY, Font.PLAIN, 13);
-
+    public static Font BODY, BODY_BOLD, BODY_SM;
     // Caption / Meta
-    public static final Font CAPTION = new Font(PRIMARY_FAMILY, Font.PLAIN, 12);
-    public static final Font CAPTION_BOLD = new Font(PRIMARY_FAMILY, Font.BOLD, 11);
-    public static final Font TINY = new Font(PRIMARY_FAMILY, Font.PLAIN, 10);
-
+    public static Font CAPTION, CAPTION_BOLD, TINY;
     // Emoji
-    public static final Font EMOJI = new Font(EMOJI_FAMILY, Font.PLAIN, 18);
-    public static final Font EMOJI_SM = new Font(EMOJI_FAMILY, Font.PLAIN, 14);
-
+    public static Font EMOJI, EMOJI_SM;
     // Avatar
-    public static final Font AVATAR_INITIAL = new Font(PRIMARY_FAMILY, Font.BOLD, 17);
-    public static final Font AVATAR_INITIAL_SM = new Font(PRIMARY_FAMILY, Font.BOLD, 13);
+    public static Font AVATAR_INITIAL, AVATAR_INITIAL_SM;
+
+    static {
+        rescale();
+    }
 
     private AppFonts() {}
+
+    /** Dựng lại toàn bộ Font theo hệ số zoom hiện hành ({@link UiScale}). */
+    public static void rescale() {
+        HEADING_LG = primary(Font.BOLD, SZ_HEADING_LG);
+        HEADING_MD = primary(Font.BOLD, SZ_HEADING_MD);
+        HEADING_SM = primary(Font.BOLD, SZ_HEADING_SM);
+
+        BODY = primary(Font.PLAIN, SZ_BODY);
+        BODY_BOLD = primary(Font.BOLD, SZ_BODY_BOLD);
+        BODY_SM = primary(Font.PLAIN, SZ_BODY_SM);
+
+        CAPTION = primary(Font.PLAIN, SZ_CAPTION);
+        CAPTION_BOLD = primary(Font.BOLD, SZ_CAPTION_BOLD);
+        TINY = primary(Font.PLAIN, SZ_TINY);
+
+        EMOJI = new Font(EMOJI_FAMILY, Font.PLAIN, UiScale.get().scaled(SZ_EMOJI));
+        EMOJI_SM = new Font(EMOJI_FAMILY, Font.PLAIN, UiScale.get().scaled(SZ_EMOJI_SM));
+
+        AVATAR_INITIAL = primary(Font.BOLD, SZ_AVATAR);
+        AVATAR_INITIAL_SM = primary(Font.BOLD, SZ_AVATAR_SM);
+    }
+
+    private static Font primary(int style, int baseSize) {
+        return new Font(PRIMARY_FAMILY, style, UiScale.get().scaled(baseSize));
+    }
+
+    /**
+     * Áp hệ số zoom hiện hành lên TOÀN bộ UI: dựng lại Font của AppFonts + đặt lại defaultFont của
+     * FlatLaf (để FlatLaf scale padding/arc của component chuẩn) rồi refresh L&F.
+     * Gọi lúc khởi động và sau mỗi lần người dùng zoom. Sau đó caller nên
+     * {@code SwingUtilities.updateComponentTreeUI(frame)} để các component đọc lại Font.
+     */
+    public static void applyGlobalScale() {
+        rescale();
+        Font base = UIManager.getFont("defaultFont");
+        // Luôn tính size từ base 13 * factor → không cộng dồn qua các lần zoom.
+        String family = base != null ? base.getFamily() : PRIMARY_FAMILY;
+        int style = base != null ? base.getStyle() : Font.PLAIN;
+        UIManager.put("defaultFont", new Font(family, style, UiScale.get().scaled(13)));
+        FlatLaf.updateUI();
+    }
 
     /** Find the first available font from a list of preferred families */
     private static String findAvailableFont(String... families) {

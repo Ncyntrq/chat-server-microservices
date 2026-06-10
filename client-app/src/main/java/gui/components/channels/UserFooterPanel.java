@@ -43,6 +43,19 @@ public class UserFooterPanel extends JPanel {
         JPanel controlsWrapper = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
         controlsWrapper.setOpaque(false);
 
+        // Nút chuyển chế độ Sáng/Tối — đổi theme NGAY tại chỗ (không reload).
+        IconButton themeToggle = new IconButton(gui.theme.ThemeManager.get().isDark() ? "☀" : "☾");
+        themeToggle.setToolTipText(gui.theme.ThemeManager.get().isDark()
+                ? "Chuyển sang giao diện Sáng" : "Chuyển sang giao diện Tối");
+        themeToggle.addActionListener(e -> {
+            gui.theme.Theme t = gui.theme.ThemeManager.get().toggle();
+            gui.ClientApplication.applyThemeLive(t);
+            boolean nowDark = t == gui.theme.Theme.DARK;
+            themeToggle.setText(nowDark ? "☀" : "☾");
+            themeToggle.setToolTipText(nowDark ? "Chuyển sang giao diện Sáng" : "Chuyển sang giao diện Tối");
+        });
+        controlsWrapper.add(themeToggle);
+
         // Reusing your standalone IconButton component with custom offsets
         controlsWrapper.add(new IconButton("⚙", e -> {
             Window owner = SwingUtilities.getWindowAncestor(this);

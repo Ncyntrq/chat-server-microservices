@@ -113,8 +113,19 @@ public class UserProfileService {
         return repository.save(profile);
     }
 
-    // UP5 — Tìm kiếm user
-    public List<UserProfile> searchUsers(String keyword) {
-        return repository.findByUsernameContainingIgnoreCaseOrDisplayNameContainingIgnoreCase(keyword, keyword);
+    // UP5 — Tìm kiếm user (loại trừ chính mình, validate, giới hạn kết quả)
+    private static final int MIN_QUERY_LENGTH = 2;
+    private static final int MAX_RESULTS = 20;
+
+    public List<UserProfile> searchUsers(String keyword, String currentUser) {
+        String q = keyword == null ? "" : keyword.trim();
+        if (q.length() < MIN_QUERY_LENGTH) {
+            return List.of();
+        }
+        return repository.findTop21ByUsernameContainingIgnoreCaseOrDisplayNameContainingIgnoreCase(q, q)
+                .stream()
+                .filter(u -> currentUser == null || !currentUser.equalsIgnoreCase(u.getUsername()))
+                .limit(MAX_RESULTS)
+                .toList();
     }
 }
