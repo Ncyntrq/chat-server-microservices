@@ -106,6 +106,8 @@ public class ChatMessageItem extends JPanel {
             // Panel hover: giờ (cho tin compact) + nút "⋯" (nếu có quyền). Tự bỏ qua nếu rỗng.
             buildHoverBar();
         }
+        // Gắn listener lên CẢ hàng để mọi lần con trỏ đổi vùng đều có sự kiện; việc hiện/ẩn
+        // do updateHover quyết định dựa trên con trỏ có nằm trong bubble/toolbar hay không.
         installHover(this);
     }
 
@@ -525,19 +527,28 @@ public class ChatMessageItem extends JPanel {
     }
 
     private final MouseAdapter hoverAdapter = new MouseAdapter() {
-        @Override
-        public void mouseEntered(MouseEvent e) {
-            setHover(true);
-        }
-        @Override
-        public void mouseExited(MouseEvent e) {
-            // Chỉ ẩn khi con trỏ thực sự rời khỏi toàn bộ item
-            Point p = SwingUtilities.convertPoint(e.getComponent(), e.getPoint(), ChatMessageItem.this);
-            if (!ChatMessageItem.this.contains(p)) {
-                setHover(false);
-            }
-        }
+        @Override public void mouseEntered(MouseEvent e) { updateHover(e); }
+        @Override public void mouseExited(MouseEvent e) { updateHover(e); }
     };
+
+    /** Hiện toolbar CHỈ khi con trỏ nằm trong bubble (hoặc toolbar đang mở), ngược lại ẩn. */
+    private void updateHover(MouseEvent e) {
+        Point p = SwingUtilities.convertPoint(e.getComponent(), e.getPoint(), this);
+        Rectangle zone = hotZoneBounds();
+        setHover(zone != null && zone.contains(p));
+    }
+
+    /** Vùng "nóng" kích hoạt hover = bubble nội dung (+ toolbar khi đang hiện). Gộp để không nhấp nháy ở khe hở. */
+    private Rectangle hotZoneBounds() {
+        if (contentPanel == null) return null;
+        Rectangle zone = SwingUtilities.convertRectangle(
+                contentPanel.getParent(), contentPanel.getBounds(), this);
+        if (toolbar != null && toolbar.isVisible()) {
+            zone = zone.union(SwingUtilities.convertRectangle(
+                    toolbar.getParent(), toolbar.getBounds(), this));
+        }
+        return zone;
+    }
 
     private void setHover(boolean hovered) {
         if (isHovered == hovered) return;
