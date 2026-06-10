@@ -298,7 +298,6 @@ public class FriendSidebar extends JPanel {
         return b;
     }
 
-    /** Mở dialog tìm kiếm + thêm bạn (tìm theo username/tên hiển thị, gửi/chấp nhận lời mời). */
     private void showAddFriendDialog() {
         Window owner = SwingUtilities.getWindowAncestor(this);
         AddFriendDialog dialog = new AddFriendDialog(owner, username -> {

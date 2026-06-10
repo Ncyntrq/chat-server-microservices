@@ -7,11 +7,7 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "chat_messages", indexes = {
-    @Index(name = "idx_chat_messages_channel_id", columnList = "channelId"),
-    @Index(name = "idx_chat_messages_sender", columnList = "sender"),
-    @Index(name = "idx_chat_messages_receiver", columnList = "receiver")
-})
+@Table(name = "chat_messages")
 public class ChatMessage {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
