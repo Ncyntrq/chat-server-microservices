@@ -4,34 +4,20 @@ import gui.theme.AppColors;
 import gui.theme.AppFonts;
 
 import javax.swing.*;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 import java.awt.*;
-import java.awt.event.InputEvent;
-import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.Map;
 
 public class ChatInputContainer extends JPanel {
-    /** Số dòng tối đa trước khi ô nhập chuyển sang cuộn trong (auto-grow trần 6 dòng). */
-    private static final int MAX_ROWS = 6;
-
-    private final JTextArea inputArea;
-    private final JScrollPane inputScroll;
+    private final JTextField inputField;
     private final JButton sendButton;
     private final JProgressBar uploadBar;
     private Runnable onAttach = () -> {};
-    private Runnable onSend = () -> {};
 
     /** Gắn handler khi bấm nút đính kèm (+). */
     public void setOnAttach(Runnable r) {
         this.onAttach = r != null ? r : () -> {};
-    }
-
-    /** Gắn handler khi gửi (Enter hoặc nút Gửi). */
-    public void setOnSend(Runnable r) {
-        this.onSend = r != null ? r : () -> {};
     }
 
     public ChatInputContainer() {
@@ -49,38 +35,15 @@ public class ChatInputContainer extends JPanel {
         leftWrap.setOpaque(false);
         leftWrap.add(plusButton);
 
-        // --- 2. Main text area (đa dòng, auto-grow) ---
-        inputArea = new JTextArea(1, 0);
-        inputArea.putClientProperty("JTextField.placeholderText", "Nhập tin nhắn...");
-        inputArea.setLineWrap(true);
-        inputArea.setWrapStyleWord(true);
-        inputArea.setBackground(AppColors.BG_TERTIARY);
-        inputArea.setForeground(AppColors.TEXT_NORMAL);
-        inputArea.setCaretColor(AppColors.TEXT_WHITE);
-        inputArea.setFont(AppFonts.BODY);
-        inputArea.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-        inputArea.setSelectionColor(AppColors.BRAND_PRIMARY);
-
-        // Enter = gửi; Shift+Enter = xuống dòng (insert-break là action mặc định của editor).
-        InputMap im = inputArea.getInputMap();
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "send-message");
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.SHIFT_DOWN_MASK), "insert-break");
-        inputArea.getActionMap().put("send-message", new AbstractAction() {
-            @Override public void actionPerformed(java.awt.event.ActionEvent e) { onSend.run(); }
-        });
-
-        // Auto-grow theo nội dung (1 → MAX_ROWS dòng), vượt thì cuộn trong ô.
-        inputArea.getDocument().addDocumentListener(new DocumentListener() {
-            @Override public void insertUpdate(DocumentEvent e) { adjustInputHeight(); }
-            @Override public void removeUpdate(DocumentEvent e) { adjustInputHeight(); }
-            @Override public void changedUpdate(DocumentEvent e) { adjustInputHeight(); }
-        });
-
-        inputScroll = new JScrollPane(inputArea,
-                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        inputScroll.setBorder(BorderFactory.createEmptyBorder());
-        inputScroll.setOpaque(false);
-        inputScroll.getViewport().setOpaque(false);
+        // --- 2. Main text field ---
+        inputField = new JTextField();
+        inputField.putClientProperty("JTextField.placeholderText", "Nhập tin nhắn...");
+        inputField.setBackground(AppColors.BG_TERTIARY);
+        inputField.setForeground(AppColors.TEXT_NORMAL);
+        inputField.setCaretColor(AppColors.TEXT_WHITE);
+        inputField.setFont(AppFonts.BODY);
+        inputField.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        inputField.setSelectionColor(AppColors.BRAND_PRIMARY);
 
         // --- 3. Right panel: emoji + send ---
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
@@ -112,9 +75,9 @@ public class ChatInputContainer extends JPanel {
                 }
                 
                 btn.addActionListener(ev -> {
-                    inputArea.replaceSelection(shortcode + " ");
+                    inputField.replaceSelection(shortcode + " ");
                     emojiMenu.setVisible(false);
-                    inputArea.requestFocusInWindow();
+                    inputField.requestFocusInWindow();
                 });
                 
                 emojiMenu.add(btn);
@@ -182,23 +145,8 @@ public class ChatInputContainer extends JPanel {
         // --- Assemble ---
         add(uploadBar, BorderLayout.NORTH);
         add(leftWrap, BorderLayout.WEST);
-        add(inputScroll, BorderLayout.CENTER);
+        add(inputField, BorderLayout.CENTER);
         add(rightWrap, BorderLayout.EAST);
-
-        adjustInputHeight(); // đặt chiều cao 1 dòng ban đầu
-    }
-
-    /** Tính lại chiều cao ô nhập theo số dòng hiển thị, kẹp trong [1 dòng, MAX_ROWS dòng]. */
-    private void adjustInputHeight() {
-        int lineH = inputArea.getFontMetrics(inputArea.getFont()).getHeight();
-        Insets in = inputArea.getInsets();
-        int oneRow = lineH + in.top + in.bottom;
-        int maxH = lineH * MAX_ROWS + in.top + in.bottom;
-        int pref = inputArea.getPreferredSize().height; // đã gồm các dòng wrap khi biết bề rộng
-        int h = Math.max(oneRow, Math.min(pref, maxH));
-        inputScroll.setPreferredSize(new Dimension(0, h));
-        revalidate();
-        repaint();
     }
 
     /** Hiện/ẩn thanh tiến trình khi đang tải tệp lên. */
@@ -219,25 +167,18 @@ public class ChatInputContainer extends JPanel {
     }
 
     public String getMessageText() {
-        return inputArea.getText();
+        return inputField.getText();
     }
 
     public void clearInput() {
-        inputArea.setText(""); // DocumentListener sẽ tự thu ô về 1 dòng
-        // JTextArea preferred size chưa kịp cập nhật khi line-wrap bật → ép về 1 dòng thủ công
-        int lineH = inputArea.getFontMetrics(inputArea.getFont()).getHeight();
-        Insets in = inputArea.getInsets();
-        int oneRow = lineH + in.top + in.bottom;
-        inputScroll.setPreferredSize(new Dimension(0, oneRow));
-        revalidate();
-        repaint();
+        inputField.setText("");
     }
 
     public JButton getSendButton() {
         return sendButton;
     }
 
-    public JTextArea getInputArea() {
-        return inputArea;
+    public JTextField getInputField() {
+        return inputField;
     }
 }

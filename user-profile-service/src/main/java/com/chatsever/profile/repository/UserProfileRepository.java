@@ -10,6 +10,5 @@ import java.util.Optional;
 @Repository
 public interface UserProfileRepository extends JpaRepository<UserProfile, String> {
     Optional<UserProfile> findByUsername(String username);
-    // Top 21: giới hạn ở DB (lấy dư 1 để bù khi loại trừ chính mình)
-    List<UserProfile> findTop21ByUsernameContainingIgnoreCaseOrDisplayNameContainingIgnoreCase(String username, String displayName);
+    List<UserProfile> findByUsernameContainingIgnoreCaseOrDisplayNameContainingIgnoreCase(String username, String displayName);
 }

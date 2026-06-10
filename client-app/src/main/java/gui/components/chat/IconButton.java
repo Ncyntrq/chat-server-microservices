@@ -47,13 +47,6 @@ public class IconButton extends JButton {
         this(iconText, null);
     }
 
-    /** Biến thể nhỏ gọn (vd toolbar tin nhắn): font emoji nhỏ + kích thước tùy chỉnh. */
-    public IconButton(String iconText, ActionListener onClick, int size) {
-        this(iconText, onClick);
-        setFont(AppFonts.EMOJI_SM);
-        setPreferredSize(new Dimension(size, size));
-    }
-
     @Override
     protected void paintComponent(Graphics g) {
         if (isHovered) {

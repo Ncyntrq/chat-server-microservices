@@ -75,8 +75,7 @@ public class UserProfileApiClient {
     // UP5 — Tìm kiếm user
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> searchUsers(String keyword) {
-        String q = java.net.URLEncoder.encode(keyword == null ? "" : keyword, java.nio.charset.StandardCharsets.UTF_8);
-        String url = ApiConfig.GATEWAY_HTTP + "/api/users/search?q=" + q;
+        String url = ApiConfig.GATEWAY_HTTP + "/api/users/search?q=" + keyword;
         HttpResponse<String> resp = sendGet(url);
         try {
             return json.readValue(resp.body(), new TypeReference<List<Map<String, Object>>>() {});
@@ -88,6 +87,22 @@ public class UserProfileApiClient {
     // ---------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------
+
+    /** Dựng body multipart/form-data với 1 part tên "file" theo đúng contract backend. */
+    private byte[] buildAvatarMultipart(java.io.File file, String boundary) throws java.io.IOException {
+        String filename = file.getName();
+        String contentType = filename.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
+        byte[] fileBytes = java.nio.file.Files.readAllBytes(file.toPath());
+
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        String header = "--" + boundary + "\r\n"
+                + "Content-Disposition: form-data; name=\"file\"; filename=\"" + filename + "\"\r\n"
+                + "Content-Type: " + contentType + "\r\n\r\n";
+        out.write(header.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        out.write(fileBytes);
+        out.write(("\r\n--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return out.toByteArray();
+    }
 
     private Map<String, Object> putJson(String path, Object body) {
         String url = ApiConfig.GATEWAY_HTTP + path;
