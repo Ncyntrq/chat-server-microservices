@@ -50,34 +50,30 @@ public class ChatMessageItem extends JPanel {
     private JPanel headerRow;
     private JTextPane messageBody;
     private JPanel toolbar;
-    private boolean editedBadgeShown = false;
+    private JLabel editedBadgeLabel;
 
     /** Layout gọn cho tin nhắn liên tiếp cùng người gửi (gộp nhóm). */
     private final boolean isConsecutive;
+    private final Container floatingLayer;
 
-    /** Constructor cũ — giữ tương thích (không có toolbar). */
+    /** Constructor cũ — giữ tương thích. */
     public ChatMessageItem(MessageDTO message, boolean isHighlighted) {
-        this(message, isHighlighted, null, null, false);
+        this(message, isHighlighted, null, null, false, null);
     }
 
-    /** Constructor với hành động (sửa/xóa/ghim). */
     public ChatMessageItem(MessageDTO message, boolean isHighlighted,
                            String currentUser, MessageActions actions) {
-        this(message, isHighlighted, currentUser, actions, false);
-    }
-
-    /** Constructor với layout gọn cho tin liên tiếp. */
-    public ChatMessageItem(MessageDTO message, boolean isHighlighted, boolean isConsecutive) {
-        this(message, isHighlighted, null, null, isConsecutive);
+        this(message, isHighlighted, currentUser, actions, false, null);
     }
 
     public ChatMessageItem(MessageDTO message, boolean isHighlighted,
-                           String currentUser, MessageActions actions, boolean isConsecutive) {
+                           String currentUser, MessageActions actions, boolean isConsecutive, Container floatingLayer) {
         this.message = message;
         this.currentUser = currentUser;
         this.actions = actions;
         this.isHighlighted = isHighlighted;
         this.isConsecutive = isConsecutive;
+        this.floatingLayer = floatingLayer;
         this.isOwn = currentUser != null && currentUser.equals(message.getSender());
         this.isSystemMsg = message.getType() == MessageType.SYSTEM
                 || message.getType() == MessageType.JOIN
@@ -315,6 +311,16 @@ public class ChatMessageItem extends JPanel {
         add(centerWrap, BorderLayout.CENTER);
     }
 
+    private void applyMessageStyle(JTextArea textArea, String content) {
+        if ("Tin nhắn bị gỡ".equals(content)) {
+            textArea.setFont(AppFonts.BODY_ITALIC);
+            textArea.setForeground(AppColors.TEXT_MUTED);
+        } else {
+            textArea.setFont(AppFonts.BODY);
+            textArea.setForeground(AppColors.TEXT_NORMAL);
+        }
+    }
+
     private void addEditedBadge() {
         if (editedBadgeShown || headerRow == null) return; // tin gộp nhóm không có header
         JLabel editedBadge = new JLabel("(đã sửa)");
@@ -360,6 +366,7 @@ public class ChatMessageItem extends JPanel {
             }
         };
         toolbar.setOpaque(false);
+        toolbar.setBorder(BorderFactory.createEmptyBorder(1, 4, 1, 4));
 
         // Giờ nhỏ (chỉ tin compact) — đặt bên trái nút "⋯".
         if (showHoverTime) {
@@ -429,7 +436,7 @@ public class ChatMessageItem extends JPanel {
     // ---------------------------------------------------------------
     /** Bắt đầu chỉnh sửa: thay messageBody bằng JTextField viền xanh. */
     public void startEditing() {
-        if (isEditing || isAttachment || messageBody == null || !isOwn) return;
+        if (isEditing || isAttachment || messageBody == null || !isOwn || "Tin nhắn bị gỡ".equals(message.getContent())) return;
         isEditing = true;
         if (toolbar != null) toolbar.setVisible(false);
 
@@ -503,6 +510,11 @@ public class ChatMessageItem extends JPanel {
         if (edited) {
             message.setIsEdited(true);
             addEditedBadge();
+        } else if (editedBadgeLabel != null) {
+            editedBadgeLabel.setVisible(!"Tin nhắn bị gỡ".equals(newContent));
+        }
+        if ("Tin nhắn bị gỡ".equals(newContent) && toolbar != null) {
+            toolbar.setVisible(false);
         }
     }
 
@@ -512,6 +524,14 @@ public class ChatMessageItem extends JPanel {
 
     public MessageDTO getMessage() {
         return message;
+    }
+
+    public boolean isConsecutive() {
+        return isConsecutive;
+    }
+
+    public boolean isHighlighted() {
+        return isHighlighted;
     }
 
     // ---------------------------------------------------------------

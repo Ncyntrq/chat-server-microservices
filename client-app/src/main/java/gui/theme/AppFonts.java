@@ -17,7 +17,7 @@ public final class AppFonts {
 
     // Preferred font families (in order of preference)
     private static final String PRIMARY_FAMILY = findAvailableFont(
-            "Segoe UI", "Noto Sans", ".SF NS", "Helvetica Neue", "SansSerif"
+            "Roboto", "Segoe UI", "Noto Sans", ".SF NS", "Helvetica Neue", "SansSerif"
     );
     private static final String EMOJI_FAMILY = findAvailableFont(
             "Segoe UI Emoji", "Noto Color Emoji", "Apple Color Emoji", "SansSerif"
