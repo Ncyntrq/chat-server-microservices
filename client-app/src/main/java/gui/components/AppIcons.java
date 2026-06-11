@@ -33,6 +33,57 @@ public final class AppIcons {
     public static Icon download(int size)   { return new DownloadIcon(size); }
     public static Icon gift(int size)       { return new GiftIcon(size); }
     public static Icon smile(int size)      { return new SmileIcon(size); }
+    public static Icon edit(int size)       { return new EditIcon(size); } // Đã thêm icon Edit (Cây bút)
+
+    /** Cây bút (Edit) — Vẽ tay 100% bằng Java2D, góc nghiêng 45 độ */
+    public static class EditIcon implements Icon {
+        private final int size;
+        EditIcon(int size) { this.size = size; }
+
+        @Override
+        public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D g2 = prep(g);
+            Color col = c != null ? c.getForeground() : AppColors.TEXT_MUTED;
+            float sw = Math.max(1.5f, size * 0.12f);
+            g2.setColor(col);
+            g2.setStroke(new BasicStroke(sw, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+
+            float cx = x + size / 2f;
+            float cy = y + size / 2f;
+
+            g2.translate(cx, cy);
+            // Xoay 45 độ để bút nghiêng, mũi chỉ xuống dưới bên trái
+            g2.rotate(Math.toRadians(45));
+
+            float pw = size * 0.22f; // Bề rộng thân bút
+            float pl = size * 0.60f; // Chiều dài tổng
+            float hw = pw / 2f;
+            float hl = pl / 2f;
+            float tipL = size * 0.20f; // Độ dài mũi bút
+
+            // Thân bút (Hình chữ nhật)
+            g2.draw(new Rectangle2D.Float(-hw, -hl, pw, pl - tipL));
+
+            // Đường kẻ ngăn cách cục tẩy ở đuôi bút
+            float eraserY = -hl + size * 0.15f;
+            g2.draw(new Line2D.Float(-hw, eraserY, hw, eraserY));
+
+            // Mũi bút (Tam giác)
+            GeneralPath tip = new GeneralPath();
+            tip.moveTo(-hw, hl - tipL);
+            tip.lineTo(0, hl);
+            tip.lineTo(hw, hl - tipL);
+            g2.draw(tip);
+
+            // Nét gạch nhỏ tạo ngòi bút chì
+            g2.draw(new Line2D.Float(0, hl - tipL * 0.4f, 0, hl));
+
+            g2.dispose();
+        }
+
+        @Override public int getIconWidth()  { return size; }
+        @Override public int getIconHeight() { return size; }
+    }
 
     /** Mặt trời (Light mode) — vòng tròn vàng sáng + 8 tia. */
     public static class SunIcon implements Icon {

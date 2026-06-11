@@ -29,7 +29,12 @@ public class ChatInputContainer extends JPanel {
 
     // Hàm để ChatClientGUI truyền dữ liệu thật vào
     public void setAvailableMentions(java.util.List<String> mentions) {
-        this.availableMentions = mentions != null ? mentions : new java.util.ArrayList<>();
+        this.availableMentions = new java.util.ArrayList<>();
+        this.availableMentions.add("all");
+
+        if (mentions != null) {
+            this.availableMentions.addAll(mentions);
+        }
     }
 
     /** Gắn handler khi bấm nút đính kèm (+). */

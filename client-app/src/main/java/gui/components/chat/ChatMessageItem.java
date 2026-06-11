@@ -4,6 +4,7 @@ import com.chatsever.common.dto.MessageDTO;
 import com.chatsever.common.enums.MessageType;
 import gui.components.AvatarBadge;
 import gui.components.AppIcons;
+import gui.profile.UserProfileDialog;
 import gui.theme.AppColors;
 import gui.theme.AppFonts;
 import network.FileApiClient;
@@ -192,6 +193,40 @@ public class ChatMessageItem extends JPanel {
         pane.setBorder(BorderFactory.createEmptyBorder(topPadding, 0, 0, 0));
         EmojiHelper.renderTextWithEmojis(pane, raw);
 
+        //CLICK VÀO TAG MENTION @USERNAME
+        pane.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                JTextPane textPane = (JTextPane) e.getSource();
+                int pos = textPane.viewToModel2D(e.getPoint());
+                if (pos >= 0) {
+                    try {
+                        int start = javax.swing.text.Utilities.getWordStart(textPane, pos);
+                        int end = javax.swing.text.Utilities.getWordEnd(textPane, pos);
+                        String word = textPane.getText(start, end - start).trim();
+
+                        if (start > 0 && textPane.getText(start - 1, 1).equals("@")) {
+                            word = "@" + word;
+                        }
+
+                        if (word.startsWith("@") && word.length() > 1) {
+                            String targetUser = word.substring(1);
+                            // Bỏ qua nếu click vào @all
+                            if (targetUser.equalsIgnoreCase("all")) return;
+
+                            Window owner = SwingUtilities.getWindowAncestor(ChatMessageItem.this);
+                            if (owner instanceof Frame) {
+                                new UserProfileDialog((Frame) owner, targetUser).setVisible(true);
+                            }
+                        }
+                    } catch (Exception ex) {
+                        // ignore
+                    }
+                }
+            }
+        });
+        // ---------------------------------------------------
+
         try {
             javax.swing.text.StyledDocument doc = pane.getStyledDocument();
             String docText = doc.getText(0, doc.getLength());
@@ -230,6 +265,23 @@ public class ChatMessageItem extends JPanel {
     private void buildChatLayout(MessageDTO message, boolean compact) {
         String senderName = message.getSender();
 
+        // --- BẮT SỰ KIỆN CLICK MỞ PROFILE CHO AVATAR VÀ SENDER NAME ---
+        MouseAdapter openProfileAdapter = new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                // Bỏ qua các tin nhắn từ hệ thống
+                if (senderName == null || senderName.isEmpty() ||
+                        "SYSTEM".equals(senderName) || "admin".equalsIgnoreCase(senderName)) {
+                    return;
+                }
+                Window owner = SwingUtilities.getWindowAncestor(ChatMessageItem.this);
+                if (owner instanceof Frame) {
+                    new UserProfileDialog((Frame) owner, senderName).setVisible(true);
+                }
+            }
+        };
+        // --------------------------------------------------------------
+
         // WEST: avatar đầy đủ, hoặc spacer canh lề khi gộp nhóm
         JComponent west;
         AvatarBadge avatar = null;
@@ -245,6 +297,11 @@ public class ChatMessageItem extends JPanel {
             String initial = senderName != null && !senderName.isEmpty()
                     ? senderName.substring(0, 1).toUpperCase() : "?";
             avatar = new AvatarBadge(initial, col);
+
+            // Đính kèm sự kiện click Profile
+            avatar.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            avatar.addMouseListener(openProfileAdapter);
+
             JPanel avatarWrapper = new JPanel(new BorderLayout());
             avatarWrapper.setOpaque(false);
             avatarWrapper.add(avatar, BorderLayout.NORTH);
@@ -265,14 +322,29 @@ public class ChatMessageItem extends JPanel {
             JLabel senderLabel = new JLabel(senderName);
             senderLabel.setFont(AppFonts.BODY_BOLD);
             senderLabel.setForeground(AppColors.avatarColorFor(senderName));
+
+            String localNickname = gui.utils.NicknameManager.getNickname(senderName);
+            if (localNickname != null) {
+                senderLabel.setText(localNickname);
+            }
+
+            // Đính kèm sự kiện click Profile
+            senderLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            senderLabel.addMouseListener(openProfileAdapter);
+
             headerRow.add(senderLabel);
 
             // #1: ProfileLoader (cache + gộp request trùng) → tối đa 1 HTTP/user thay vì 1/tin nhắn
             final AvatarBadge avatarRef = avatar;
             gui.utils.ProfileLoader.load(senderName, profile -> {
                 if (profile == null) return;
-                Object dn = profile.get("displayName");
-                if (dn != null && !dn.toString().isBlank()) senderLabel.setText(dn.toString());
+
+                // 2. Chỉ nạp DisplayName từ API nếu NGƯỜI DÙNG KHÔNG CÓ BIỆT DANH
+                if (gui.utils.NicknameManager.getNickname(senderName) == null) {
+                    Object dn = profile.get("displayName");
+                    if (dn != null && !dn.toString().isBlank()) senderLabel.setText(dn.toString());
+                }
+
                 Object av = profile.get("avatarUrl");
                 if (av != null && avatarRef != null) {
                     String url = av.toString();

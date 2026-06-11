@@ -114,7 +114,7 @@ public class ServerSidebar extends JPanel {
             serverItems.put(id, item);
             item.setAlignmentX(Component.CENTER_ALIGNMENT);
             item.setActive(id == activeServerId);
-            
+
             if (iconUrl != null && !iconUrl.isBlank()) {
                 if (!iconUrl.startsWith("http")) iconUrl = network.ApiConfig.GATEWAY_HTTP + iconUrl;
                 item.loadServerIconFromUrl(iconUrl);
@@ -156,6 +156,12 @@ public class ServerSidebar extends JPanel {
             lastUnread.putAll(unreadCounts);
             applyUnread();
         });
+    }
+
+    // --- ĐÃ THÊM HÀM NÀY ĐỂ BÊN NGOÀI GỌI ---
+    public void selectHome() {
+        this.activeServerId = -1;
+        refreshActiveStates();
     }
 
     public String getServerName(long id) {
