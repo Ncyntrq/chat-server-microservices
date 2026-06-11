@@ -367,15 +367,42 @@ public class ChatClientGUI extends JFrame {
     }
 
     /** Mở DM với 1 người bạn. */
-    private void openDirectMessage(String username) {
+    public void openDirectMessage(String username) {
+        // --- FIX LỖI GIAO DIỆN KHI NHẢY TỪ SERVER SANG CHAT RIÊNG ---
+        if (this.activeServerId != -1) {
+            this.activeServerId = -1;
+            // Xóa thanh Channels, thay bằng thanh Friends (Trang chủ)
+            westPanel.remove(((BorderLayout) westPanel.getLayout()).getLayoutComponent(BorderLayout.CENTER));
+            westPanel.add(friendSidebar, BorderLayout.CENTER);
+
+            // Ẩn danh sách thành viên Server bên phải
+            eastContainer.setVisible(false);
+
+            // ---> THÊM DÒNG NÀY ĐỂ HIGHLIGHT LẠI NÚT HOME Ở CỘT NGOÀI CÙNG BÊN TRÁI <---
+            if (serverSidebar != null) {
+                serverSidebar.selectHome();;
+            }
+
+            westPanel.revalidate();
+            westPanel.repaint();
+
+            // Nạp lại danh sách online/bạn bè cho Sidebar
+            loadPresence();
+        }
+        // -------------------------------------------------------------
+
         this.activeChannelId = -1;
         this.activePrivateUser = username;
         chatInput.setVisible(true);
-        setChannelHeader("@ " + username);
+
+        // --- Lấy Biệt danh cục bộ (nếu có) để hiển thị lên Header ---
+        String localNick = gui.utils.NicknameManager.getNickname(username);
+        setChannelHeader("@ " + (localNick != null ? localNick : username));
+
         chatHistoryView.setPlaceholderText("Send your first message to " + username);
         clearChat();
 
-        // ---> NOTE 2: Nạp tên bạn bè vào danh sách Tag @ (chỉ tag được người đang chat cùng)
+        // Nạp tên bạn bè vào danh sách Tag @ (chỉ tag được người đang chat cùng)
         chatInput.setAvailableMentions(List.of(username));
 
         new SwingWorker<Void, Void>() {
@@ -393,7 +420,7 @@ public class ChatClientGUI extends JFrame {
                         if (!"[SYSTEM_FRIEND_UPDATE]".equals(m.getContent())) chatHistoryView.appendMessage(m);
                     }
                 } catch (Exception ex) {
-                    Toast.error(ChatClientGUI.this, "Failed to load history: " + ex.getMessage());
+                    gui.components.feedback.Toast.error(ChatClientGUI.this, "Failed to load history: " + ex.getMessage());
                 }
             }
         }.execute();

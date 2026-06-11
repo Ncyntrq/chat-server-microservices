@@ -2,6 +2,7 @@ package gui.components.chat;
 
 import gui.components.AvatarBadge;
 import gui.components.PresenceStatusIcon;
+import gui.profile.UserProfileDialog;
 import gui.theme.AppColors;
 import gui.theme.AppFonts;
 
@@ -19,6 +20,7 @@ public class UserListItem extends JPanel {
     // Kích thước icon trạng thái overlay lên avatar (góc dưới phải)
     private static final int STATUS_ICON_SIZE = 14;
 
+    private final String username; // Thêm biến lưu trữ username gốc
     private PresenceStatusIcon.Status currentStatus;
     private final AvatarBadge avatar;
     private final JLabel nameLabel;
@@ -57,6 +59,7 @@ public class UserListItem extends JPanel {
      * @param isOnline    hiển thị màu tên sáng hay mờ ban đầu.
      */
     public UserListItem(String username, String customStatus, Color statusColor, boolean isOnline) {
+        this.username = username; // Lưu lại username để dùng cho kiểm tra biệt danh
         this.currentStatus = resolveStatusFromColor(statusColor, isOnline);
 
         setLayout(new BorderLayout(10, 0));
@@ -64,12 +67,22 @@ public class UserListItem extends JPanel {
         setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 10));
         setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
-        // Hover & Right-click
+        // Hover, Right-click & Left-click (Open Profile)
         addMouseListener(new MouseAdapter() {
             @Override public void mouseEntered(MouseEvent e) { isHovered = true; repaint(); }
             @Override public void mouseExited(MouseEvent e)  { isHovered = false; repaint(); }
             @Override public void mouseClicked(MouseEvent e) {
-                if (SwingUtilities.isRightMouseButton(e) && onContextMenu != null) onContextMenu.run();
+                if (SwingUtilities.isRightMouseButton(e) && onContextMenu != null) {
+                    onContextMenu.run();
+                } else if (SwingUtilities.isLeftMouseButton(e)) {
+                    // Mở profile khi click chuột trái
+                    if (username == null || username.equals("SYSTEM") || username.equalsIgnoreCase("admin")) return;
+
+                    Window owner = SwingUtilities.getWindowAncestor(UserListItem.this);
+                    if (owner instanceof Frame) {
+                        new UserProfileDialog((Frame) owner, username).setVisible(true);
+                    }
+                }
             }
         });
 
@@ -86,7 +99,9 @@ public class UserListItem extends JPanel {
         textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
         textPanel.setOpaque(false);
 
-        nameLabel = new JLabel(username);
+        // --- ÁP DỤNG BIỆT DANH LOCAL BAN ĐẦU ---
+        String localNickname = gui.utils.NicknameManager.getNickname(username);
+        nameLabel = new JLabel(localNickname != null ? localNickname : username);
         nameLabel.setForeground(isOnline ? AppColors.TEXT_HEADER : AppColors.TEXT_MUTED);
         nameLabel.setFont(AppFonts.BODY_BOLD);
         textPanel.add(nameLabel);
@@ -140,10 +155,14 @@ public class UserListItem extends JPanel {
     }
 
     private void applyProfileToUI(java.util.Map<String, Object> profile) {
-        if (profile.get("displayName") != null
-                && !profile.get("displayName").toString().isBlank()) {
-            nameLabel.setText(profile.get("displayName").toString());
+        // --- CHỈ NẠP TÊN TỪ API NẾU NGƯỜI DÙNG KHÔNG CÓ BIỆT DANH ---
+        if (gui.utils.NicknameManager.getNickname(this.username) == null) {
+            if (profile.get("displayName") != null
+                    && !profile.get("displayName").toString().isBlank()) {
+                nameLabel.setText(profile.get("displayName").toString());
+            }
         }
+
         boolean hasUrl = false;
         if (profile.get("avatarUrl") != null) {
             String url = profile.get("avatarUrl").toString();
@@ -156,7 +175,7 @@ public class UserListItem extends JPanel {
         if (!hasUrl) {
             avatar.setLoading(false);
         }
-        
+
         if (profile.get("customStatus") != null
                 && !profile.get("customStatus").toString().isBlank()) {
             statusTextLabel.setText(profile.get("customStatus").toString());
@@ -173,7 +192,7 @@ public class UserListItem extends JPanel {
         this.currentStatus = newStatus;
 
         boolean online = newStatus != PresenceStatusIcon.Status.OFFLINE
-                      && newStatus != PresenceStatusIcon.Status.INVISIBLE;
+                && newStatus != PresenceStatusIcon.Status.INVISIBLE;
         if (unreadCount == 0) {
             nameLabel.setForeground(online ? AppColors.TEXT_HEADER : AppColors.TEXT_MUTED);
         }
