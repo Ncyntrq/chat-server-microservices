@@ -428,6 +428,10 @@ public class ChatMessageItem extends JPanel {
             contentPanel.add(messageBody);
         }
 
+        if (compact && Boolean.TRUE.equals(message.getIsEdited()) && !isDeletedMsg) {
+            addEditedBadge();
+        }
+
         reactionBadgePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0)) {
             @Override
             protected void paintComponent(Graphics g) {
@@ -481,14 +485,24 @@ public class ChatMessageItem extends JPanel {
     }
 
     private void addEditedBadge() {
-        if (editedBadgeShown || headerRow == null) return; // tin gộp nhóm không có header
+        if (editedBadgeShown) return; 
         JLabel editedBadge = new JLabel("(đã sửa)");
         editedBadge.setFont(AppFonts.TINY);
         editedBadge.setForeground(AppColors.TEXT_MUTED);
-        headerRow.add(editedBadge);
+
+        if (headerRow != null) {
+            headerRow.add(editedBadge);
+            headerRow.revalidate();
+            headerRow.repaint();
+        } else {
+            // Tin nhắn gộp nhóm (compact) không có headerRow
+            editedBadge.setAlignmentX(Component.LEFT_ALIGNMENT);
+            editedBadge.setBorder(BorderFactory.createEmptyBorder(0, 12, 2, 0)); // Thụt lề cho khớp
+            contentPanel.add(editedBadge); // Chèn vào dưới cùng của contentPanel
+            contentPanel.revalidate();
+            contentPanel.repaint();
+        }
         editedBadgeShown = true;
-        headerRow.revalidate();
-        headerRow.repaint();
     }
 
     // ---------------------------------------------------------------
@@ -686,11 +700,14 @@ public class ChatMessageItem extends JPanel {
         if (reactionBadgePanel == null) return;
         reactionBadgePanel.removeAll();
         java.util.List<MessageDTO.ReactionDTO> reactions = message.getReactions();
-        if (reactions == null || reactions.isEmpty()) {
+        boolean isDeleted = "Tin nhắn bị gỡ".equals(message.getContent());
+        if (reactions == null || reactions.isEmpty() || isDeleted) {
             reactionBadgePanel.setVisible(false);
+            if (reactionWrap != null) reactionWrap.setVisible(false);
             return;
         }
         reactionBadgePanel.setVisible(true);
+        if (reactionWrap != null) reactionWrap.setVisible(true);
 
         java.util.Map<String, Integer> emojiCounts = new java.util.LinkedHashMap<>();
         java.util.Map<String, Boolean> meReactedMap = new java.util.HashMap<>();
