@@ -33,6 +33,9 @@ public class ChatMessage {
     private MessageType type;
     
     private Boolean isEdited;
+    
+    @Column(name = "reply_to_message_id")
+    private Long replyToMessageId;
 
     public ChatMessage() {}
 
@@ -54,4 +57,6 @@ public class ChatMessage {
     public void setType(MessageType type) { this.type = type; }
     public Boolean getIsEdited() { return isEdited; }
     public void setIsEdited(Boolean isEdited) { this.isEdited = isEdited; }
+    public Long getReplyToMessageId() { return replyToMessageId; }
+    public void setReplyToMessageId(Long replyToMessageId) { this.replyToMessageId = replyToMessageId; }
 }

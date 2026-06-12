@@ -15,9 +15,11 @@ import java.util.List;
 public class MessageController {
     
     private final MessageRepository messageRepository;
+    private final com.chatsever.messaging.service.MessageService messageService;
 
-    public MessageController(MessageRepository messageRepository) {
+    public MessageController(MessageRepository messageRepository, com.chatsever.messaging.service.MessageService messageService) {
         this.messageRepository = messageRepository;
+        this.messageService = messageService;
     }
     
     @GetMapping("/{channelId}/messages")
@@ -64,5 +66,25 @@ public class MessageController {
             results = List.of();
         }
         return ResponseEntity.ok(results);
+    }
+
+    // Thêm Cảm xúc
+    @PostMapping("/{messageId}/reactions/{emoji}")
+    public ResponseEntity<Void> addReaction(
+            @PathVariable Long messageId,
+            @PathVariable String emoji,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        messageService.addReaction(messageId, userId, emoji);
+        return ResponseEntity.ok().build();
+    }
+
+    // Xóa Cảm xúc
+    @DeleteMapping("/{messageId}/reactions/{emoji}")
+    public ResponseEntity<Void> removeReaction(
+            @PathVariable Long messageId,
+            @PathVariable String emoji,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        messageService.removeReaction(messageId, userId, emoji);
+        return ResponseEntity.ok().build();
     }
 }

@@ -22,6 +22,7 @@ services:
   auth-url: ${AUTH_SERVICE_URL:http://localhost:8081}
   presence-url: ${PRESENCE_SERVICE_URL:http://localhost:8083}
   server-url: ${SERVER_SERVICE_URL:http://localhost:8085}
+  channel-url: ${CHANNEL_SERVICE_URL:http://localhost:8084}
 
 management:
   endpoints:

@@ -2,13 +2,14 @@ package gui;
 
 import gui.chat.ChatHistoryView;
 import gui.chat.FileUploadController;
-import gui.chat.MemberListView;
+import gui.chat.RightSidebarView;
 import gui.chat.OutboundMessageController;
 import gui.chat.PinController;
 import gui.chat.UnreadCountSync;
 import gui.components.channels.ChannelSidebar;
 import gui.components.chat.ChatMessageItem;
 import gui.components.chat.ChatInputContainer;
+import gui.components.AppIcons;
 import gui.components.chat.IconButton;
 import gui.components.feedback.Toast;
 import gui.components.friends.FriendSidebar;
@@ -36,7 +37,7 @@ import java.util.ArrayList;
 /**
  * Cửa sổ chat chính. Đóng vai trò orchestrator: dựng layout, giữ trạng thái
  * điều hướng (server/channel/DM đang mở) và nối các thành phần con:
- * {@link ChatHistoryView}, {@link MemberListView}, {@link UnreadCountSync},
+ * {@link ChatHistoryView}, {@link RightSidebarView}, {@link UnreadCountSync},
  * {@link FileUploadController} + các sidebar.
  */
 public class ChatClientGUI extends JFrame {
@@ -62,7 +63,7 @@ public class ChatClientGUI extends JFrame {
 
     // Thành phần con tách ra (Phase 0 refactor)
     private final ChatHistoryView chatHistoryView;
-    private final MemberListView memberListView;
+    private final RightSidebarView rightSidebar;
     private final UnreadCountSync unreadSync;
     private final FileUploadController fileUpload;
     private final PinController pinController;
@@ -71,7 +72,7 @@ public class ChatClientGUI extends JFrame {
     // Header vùng chat (tiêu đề kênh + icon ghim 📌)
     private JLabel channelTitleLabel;
     private JPanel channelHeaderPanel;
-    
+
     private gui.components.chat.TypingIndicatorPanel typingIndicatorPanel;
 
     private long activeServerId = -1;
@@ -83,6 +84,10 @@ public class ChatClientGUI extends JFrame {
         @Override public void onEdit(MessageDTO msg, String newContent) { outbound.sendEdit(msg, newContent); }
         @Override public void onDelete(MessageDTO msg) { outbound.sendDelete(msg); }
         @Override public void onPin(MessageDTO msg) { pinController.pin(msg); }
+        @Override public void onReply(MessageDTO msg) {
+            chatInput.setReplyContext(msg.getMessageId(), msg.getSender(), msg.getContent());
+            chatInput.getInputArea().requestFocusInWindow();
+        }
     };
 
     public ChatClientGUI(String sessionUsername) {
@@ -101,11 +106,14 @@ public class ChatClientGUI extends JFrame {
         this.channelSidebar = new ChannelSidebar(sessionUsername);
         this.friendSidebar = new FriendSidebar(sessionUsername);
         this.chatHistoryView = new ChatHistoryView(sessionUsername, messageActions);
-        this.memberListView = new MemberListView(sessionUsername, this::openAssignRoleDialog, this::confirmKick);
+        this.rightSidebar = new RightSidebarView(sessionUsername, this::openAssignRoleDialog, this::confirmKick);
         this.unreadSync = new UnreadCountSync(notificationApi, serverSidebar, channelSidebar, friendSidebar, sessionUsername);
         this.fileUpload = new FileUploadController(this, fileApi, wsClient, sessionUsername, this::toast, chatInput::setUploading);
         this.pinController = new PinController(this, this::toast, channelApi, () -> activeChannelId);
         this.outbound = new OutboundMessageController(wsClient, sessionUsername, this::toast);
+
+        // Khởi tạo SystemTray (icon notification khi app minimize)
+        gui.notification.SystemTrayManager.get().init(this);
 
         wireSidebarCallbacks();
 
@@ -123,7 +131,7 @@ public class ChatClientGUI extends JFrame {
 
         eastContainer = new JPanel(new BorderLayout());
         eastContainer.setBackground(AppColors.BG_SECONDARY);
-        eastContainer.add(memberListView, BorderLayout.CENTER);
+        eastContainer.add(rightSidebar, BorderLayout.CENTER);
         eastContainer.add(miniSidebar, BorderLayout.EAST);
 
         add(westPanel, BorderLayout.WEST);
@@ -198,10 +206,10 @@ public class ChatClientGUI extends JFrame {
         channelTitleLabel.setFont(AppFonts.BODY_BOLD);
         channelTitleLabel.setForeground(AppColors.TEXT_HEADER);
 
-        IconButton pinBtn = new IconButton("📌", e -> pinController.openDialog());
+        IconButton pinBtn = new IconButton(AppIcons.pin(16), e -> pinController.openDialog());
         pinBtn.setToolTipText("Pinned messages");
 
-        IconButton toggleMiniBtn = new IconButton("👥", e -> {
+        IconButton toggleMiniBtn = new IconButton(AppIcons.users(18), e -> {
             boolean show = !miniSidebar.isVisible();
             miniSidebar.setVisible(show);
             if (show) miniSidebar.refresh();
@@ -210,7 +218,7 @@ public class ChatClientGUI extends JFrame {
         });
         toggleMiniBtn.setToolTipText("Friends & Servers");
 
-        IconButton searchBtn = new IconButton("🔍", e -> openSearchDialog());
+        IconButton searchBtn = new IconButton(AppIcons.search(16), e -> openSearchDialog());
         searchBtn.setToolTipText("Search messages");
 
         JPanel headerRightWrap = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
@@ -308,10 +316,15 @@ public class ChatClientGUI extends JFrame {
             westPanel.add(friendSidebar, BorderLayout.CENTER);
             eastContainer.setVisible(false); // Ẩn thanh thành viên
             chatInput.setVisible(false);      // Ẩn thanh nhập khi ở Home
+
+            // ---> NOTE 1: Xóa danh sách Tag @ khi về trang chủ
+            chatInput.setAvailableMentions(List.of());
+
             if (chatHistoryView != null) {
-            chatHistoryView.setPlaceholderText("Welcome to ChatServer! Select a server, channel, or friend to start chatting.");
-        }    clearChat();
-            memberListView.renderOnline(List.of());
+                chatHistoryView.setPlaceholderText("Welcome to ChatServer! Select a server, channel, or friend to start chatting.");
+            }
+            clearChat();
+            rightSidebar.renderOnline(List.of());
             loadPresence();
         } else {
             this.activePrivateUser = null;
@@ -322,6 +335,9 @@ public class ChatClientGUI extends JFrame {
             setChannelHeader(null);
             channelSidebar.loadChannels(serverId, serverName != null ? serverName : "Server #" + serverId);
             clearChat();
+            // Sidebar phải: hiện section Thành viên; Ảnh/Video & File chờ tới khi chọn channel
+            rightSidebar.setMembersVisible(true);
+            rightSidebar.setAttachments(List.of());
             loadPermissionsAndMembers(serverId);
         }
         unreadSync.refresh(); // làm tươi badge chưa đọc sau khi điều hướng
@@ -337,6 +353,10 @@ public class ChatClientGUI extends JFrame {
         chatHistoryView.setPlaceholderText("No messages yet — start the conversation 👋");
         clearChat();
 
+        // Sidebar phải: hiện đủ 3 section; Ảnh/Video & File trích từ lịch sử tin nhắn (đồng bộ với đoạn chat)
+        rightSidebar.setMembersVisible(true);
+        rightSidebar.setAttachments(List.of());
+
         new SwingWorker<Void, Void>() {
             @Override protected Void doInBackground() { notificationApi.ackChannel(channelId, sessionUsername); return null; }
             @Override protected void done() { unreadSync.refresh(); }
@@ -348,7 +368,9 @@ public class ChatClientGUI extends JFrame {
             }
             @Override protected void done() {
                 try {
-                    for (MessageDTO m : get()) chatHistoryView.appendMessage(m);
+                    List<MessageDTO> msgs = get();
+                    for (MessageDTO m : msgs) chatHistoryView.appendMessage(m);
+                    if (channelId == activeChannelId) rightSidebar.setAttachments(extractAttachments(msgs));
                 } catch (Exception ex) {
                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
                     Toast.error(ChatClientGUI.this, "Failed to load history: " + cause.getMessage());
@@ -357,14 +379,60 @@ public class ChatClientGUI extends JFrame {
         }.execute();
     }
 
+    /** Trích Ảnh/Video & File từ danh sách tin nhắn đã tải (mới nhất trước) cho sidebar phải. */
+    private List<gui.components.chat.ChannelAttachment> extractAttachments(List<MessageDTO> msgs) {
+        List<gui.components.chat.ChannelAttachment> atts = new java.util.ArrayList<>();
+        for (MessageDTO m : msgs) {
+            gui.components.chat.ChannelAttachment a = gui.components.chat.ChatMessageItem.toChannelAttachment(m);
+            if (a != null) atts.add(a);
+        }
+        java.util.Collections.reverse(atts);
+        return atts;
+    }
+
     /** Mở DM với 1 người bạn. */
-    private void openDirectMessage(String username) {
+    public void openDirectMessage(String username) {
+        // --- FIX LỖI GIAO DIỆN KHI NHẢY TỪ SERVER SANG CHAT RIÊNG ---
+        if (this.activeServerId != -1) {
+            this.activeServerId = -1;
+            // Xóa thanh Channels, thay bằng thanh Friends (Trang chủ)
+            westPanel.remove(((BorderLayout) westPanel.getLayout()).getLayoutComponent(BorderLayout.CENTER));
+            westPanel.add(friendSidebar, BorderLayout.CENTER);
+
+            // Ẩn danh sách thành viên Server bên phải
+            eastContainer.setVisible(false);
+
+            // ---> THÊM DÒNG NÀY ĐỂ HIGHLIGHT LẠI NÚT HOME Ở CỘT NGOÀI CÙNG BÊN TRÁI <---
+            if (serverSidebar != null) {
+                serverSidebar.selectHome();;
+            }
+
+            westPanel.revalidate();
+            westPanel.repaint();
+
+            // Nạp lại danh sách online/bạn bè cho Sidebar
+            loadPresence();
+        }
+        // -------------------------------------------------------------
+
         this.activeChannelId = -1;
         this.activePrivateUser = username;
         chatInput.setVisible(true);
-        setChannelHeader("@ " + username);
+
+        // --- Lấy Biệt danh cục bộ (nếu có) để hiển thị lên Header ---
+        String localNick = gui.utils.NicknameManager.getNickname(username);
+        setChannelHeader("@ " + (localNick != null ? localNick : username));
+
         chatHistoryView.setPlaceholderText("Send your first message to " + username);
         clearChat();
+
+        // Nạp tên bạn bè vào danh sách Tag @ (chỉ tag được người đang chat cùng)
+        chatInput.setAvailableMentions(List.of(username));
+
+        // Sidebar phải: hiện Ảnh/Video & File, ẩn Thành viên (DM không có danh sách thành viên)
+        eastContainer.setVisible(true);
+        rightSidebar.setMembersVisible(false);
+        rightSidebar.setAttachments(List.of());
 
         new SwingWorker<Void, Void>() {
             @Override protected Void doInBackground() { notificationApi.ackDm(username, sessionUsername); return null; }
@@ -377,11 +445,14 @@ public class ChatClientGUI extends JFrame {
             }
             @Override protected void done() {
                 try {
-                    for (MessageDTO m : get()) {
+                    List<MessageDTO> msgs = get();
+                    for (MessageDTO m : msgs) {
                         if (!"[SYSTEM_FRIEND_UPDATE]".equals(m.getContent())) chatHistoryView.appendMessage(m);
                     }
+                    // Trích Ảnh/Video & File từ tin nhắn DM đã tải (DM không có channelId để gọi API)
+                    if (username.equals(activePrivateUser)) rightSidebar.setAttachments(extractAttachments(msgs));
                 } catch (Exception ex) {
-                    Toast.error(ChatClientGUI.this, "Failed to load history: " + ex.getMessage());
+                    gui.components.feedback.Toast.error(ChatClientGUI.this, "Failed to load history: " + ex.getMessage());
                 }
             }
         }.execute();
@@ -445,7 +516,11 @@ public class ChatClientGUI extends JFrame {
                     if (serverData == null) serverData = details;
                     String ownerId = String.valueOf(serverData.get("ownerId"));
 
-                    memberListView.renderServerMembers(allUsers, online, ownerId);
+                    rightSidebar.renderServerMembers(allUsers, online, ownerId);
+
+                    // ---> NOTE 3: Nạp toàn bộ thành viên của Server vào danh sách Tag @
+                    chatInput.setAvailableMentions(allUsers);
+
                 } catch (Exception ex) {
                     // giữ nguyên hiển thị cũ nếu lỗi
                 }
@@ -456,15 +531,15 @@ public class ChatClientGUI extends JFrame {
     /** Cập nhật danh sách online (fallback hoặc trigger từ WS LIST). */
     private void setOnlineUsers(List<String> usernames) {
         if (activeServerId > 0) { loadServerMembersAndPresence(activeServerId); return; }
-        memberListView.renderOnline(usernames);
+        rightSidebar.renderOnline(usernames);
     }
 
-    /** Mở dialog cấp Role cho 1 thành viên (context menu MemberListView). */
+    /** Mở dialog cấp Role cho 1 thành viên (context menu RightSidebarView). */
     private void openAssignRoleDialog(String username) {
         new gui.server.AssignRoleDialog(this, activeServerId, username).setVisible(true);
     }
 
-    /** Xác nhận + thực thi Kick 1 thành viên (context menu MemberListView). */
+    /** Xác nhận + thực thi Kick 1 thành viên (context menu RightSidebarView). */
     private void confirmKick(String username) {
         int confirm = JOptionPane.showConfirmDialog(this,
                 "Are you sure you want to kick " + username + "?",
@@ -507,7 +582,7 @@ public class ChatClientGUI extends JFrame {
             Toast.warn(this, "WebSocket not ready, message not sent");
             return;
         }
-        outbound.sendChat(text, activeChannelId, activeServerId, activePrivateUser);
+        outbound.sendChat(text, activeChannelId, activeServerId, activePrivateUser, chatInput.getReplyToMessageId());
         chatInput.clearInput();
     }
 
@@ -558,8 +633,17 @@ public class ChatClientGUI extends JFrame {
             case SYSTEM -> appendSystem(msg.getContent());
             case ERROR -> Toast.error(this, msg.getContent());
             case TYPING -> {
-                if (belongsToActiveChannel(msg) && !sessionUsername.equals(msg.getSender())) {
+                if (belongsToActiveTyping(msg) && !sessionUsername.equals(msg.getSender())) {
                     typingIndicatorPanel.addTypingUser(msg.getSender());
+                }
+            }
+            case STATUS -> {
+                // Cập nhật trạng thái real-time: sender=username, content=statusName (vd "IDLE")
+                String who = msg.getSender();
+                String statusStr = msg.getContent();
+                if (who != null && statusStr != null && !sessionUsername.equals(who)) {
+                    rightSidebar.updateUserStatus(who, statusStr);
+                    friendSidebar.updateUserStatus(who, statusStr);
                 }
             }
             case PING, PONG -> { /* ignore */ }
@@ -580,6 +664,69 @@ public class ChatClientGUI extends JFrame {
         } else {
             unreadSync.refresh();
         }
+
+        // Notify OS
+        if (msg.getSender() != null && !msg.getSender().equals(sessionUsername)) {
+            new Thread(() -> {
+                String title, content, avatarText, avatarUrl;
+                Runnable onClick;
+
+                if (msg.getType() == MessageType.PRIVATE) {
+                    title = "Tin nhắn từ " + msg.getSender();
+                    content = msg.getContent();
+                    avatarText = msg.getSender();
+                    
+                    java.util.Map<String, Object> profile = network.UserProfileCache.get(msg.getSender());
+                    if (profile == null) {
+                        try {
+                            profile = new network.UserProfileApiClient().getProfile(msg.getSender());
+                        } catch (Exception ignored) {}
+                    }
+                    avatarUrl = (profile != null && profile.get("avatarUrl") != null) ? profile.get("avatarUrl").toString() : null;
+                    if (avatarUrl == null && profile != null && profile.get("avatar") != null) avatarUrl = profile.get("avatar").toString();
+
+                    onClick = () -> {
+                        gui.notification.SystemTrayManager.get().restoreApp();
+                        openDirectMessage(msg.getSender());
+                    };
+                } else {
+                    String serverName = serverSidebar.getServerName(msg.getServerId());
+                    if (serverName == null || serverName.isBlank()) serverName = "Server";
+                    
+                    String channelName = channelSidebar.getChannelName(msg.getChannelId());
+                    if (channelName == null || channelName.isBlank()) {
+                        try {
+                            java.util.List<java.util.Map<String, Object>> channels = new network.ChannelApiClient().getChannelsByServer(msg.getServerId());
+                            for (java.util.Map<String, Object> ch : channels) {
+                                if (String.valueOf(msg.getChannelId()).equals(String.valueOf(ch.get("id")))) {
+                                    channelName = ch.get("name") != null ? ch.get("name").toString() : null;
+                                    break;
+                                }
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                    if (channelName == null || channelName.isBlank()) channelName = "Kênh";
+                    
+                    title = serverName;
+                    avatarText = serverName;
+                    avatarUrl = serverSidebar.getServerIconUrl(msg.getServerId());
+                    content = "#" + channelName + " - " + msg.getSender() + ": " + msg.getContent();
+                    
+                    onClick = () -> {
+                        gui.notification.SystemTrayManager.get().restoreApp();
+                        onServerSelected(msg.getServerId(), serverSidebar.getServerName(msg.getServerId()));
+                        SwingUtilities.invokeLater(() -> onChannelSelected(msg.getChannelId()));
+                    };
+                }
+
+                if (content == null || content.isEmpty() || content.endsWith(": null")) {
+                    if (msg.getType() == MessageType.PRIVATE) content = "[Tệp đính kèm]";
+                    else content = "#" + channelSidebar.getChannelName(msg.getChannelId()) + " - " + msg.getSender() + " đã gửi 1 tệp đính kèm";
+                }
+
+                gui.notification.SystemTrayManager.get().notifyNewMessage(title, content, avatarText, avatarUrl, onClick);
+            }).start();
+        }
     }
 
     /** Chỉ hiển thị tin của channel đang mở, hoặc tin private. */
@@ -591,6 +738,28 @@ public class ChatClientGUI extends JFrame {
             return isFromFriend || isToFriend;
         }
         return msg.getChannelId() == null || msg.getChannelId() == activeChannelId;
+    }
+
+    /**
+     * Lọc sự kiện TYPING: chỉ hiển thị khi đang ở đúng channel/DM mà người gõ đang nhắn.
+     * - DM typing: receiver phải là mình VÀ sender phải là người đang chat cùng.
+     * - Channel typing: channelId phải khớp VÀ serverId phải khớp.
+     * Tách riêng khỏi belongsToActiveChannel vì TYPING có trường receiver (khác PRIVATE message).
+     */
+    private boolean belongsToActiveTyping(MessageDTO msg) {
+        boolean isDmTyping = msg.getReceiver() != null;
+        if (isDmTyping) {
+            // DM typing: chỉ hiển thị nếu đang mở DM với đúng người gửi
+            // và receiver của typing event là chính mình
+            return activePrivateUser != null
+                    && activePrivateUser.equals(msg.getSender())
+                    && sessionUsername.equals(msg.getReceiver());
+        }
+        // Channel typing: phải đang ở đúng channel VÀ đúng server
+        if (activeChannelId <= 0 || activePrivateUser != null) return false;
+        boolean channelMatch = msg.getChannelId() != null && msg.getChannelId() == activeChannelId;
+        boolean serverMatch = msg.getServerId() == null || msg.getServerId() == activeServerId;
+        return channelMatch && serverMatch;
     }
 
     /** Tin SYSTEM thật từ server → giữ trong luồng chat. */

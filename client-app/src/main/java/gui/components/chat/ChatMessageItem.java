@@ -3,6 +3,8 @@ package gui.components.chat;
 import com.chatsever.common.dto.MessageDTO;
 import com.chatsever.common.enums.MessageType;
 import gui.components.AvatarBadge;
+import gui.components.AppIcons;
+import gui.profile.UserProfileDialog;
 import gui.theme.AppColors;
 import gui.theme.AppFonts;
 import network.FileApiClient;
@@ -30,6 +32,7 @@ public class ChatMessageItem extends JPanel {
         void onEdit(MessageDTO message, String newContent);
         void onDelete(MessageDTO message);
         void onPin(MessageDTO message);
+        void onReply(MessageDTO message);
     }
 
     private final MessageDTO message;
@@ -142,6 +145,7 @@ public class ChatMessageItem extends JPanel {
         };
         content.setEditorKit(new WrapEditorKit()); // bẻ được từ dài
         content.setEditable(false);
+        makeNonInteractive(content); // chặn focus/bôi đen/con trỏ soạn thảo
         content.setOpaque(false);
         content.setFont(AppFonts.BODY_SM);
         content.setForeground(AppColors.TEXT_MUTED);
@@ -167,12 +171,11 @@ public class ChatMessageItem extends JPanel {
         add(row, BorderLayout.CENTER);
     }
 
-    /** Thân tin dạng text: JTextPane render emoji + wrap (bẻ được cả từ dài) + giới hạn bề rộng. */
+    /** Thân tin dạng text: Xử lý hiển thị Tag @ (Màu xanh) và bẻ wrap từ dài */
     private JTextPane createTextBody(String content, int topPadding) {
         final String raw = content == null ? "" : content;
         JTextPane pane = new JTextPane() {
             @Override public Dimension getPreferredSize() {
-                // Bề rộng ÔM SÁT nội dung: = dòng dài nhất (cap ở maxBubble) ⇒ box & toolbar bám sát tin.
                 int cap = maxBubbleWidth();
                 FontMetrics fm = getFontMetrics(getFont());
                 int longest = 0;
@@ -181,19 +184,79 @@ public class ChatMessageItem extends JPanel {
                 setSize(w, Short.MAX_VALUE);
                 return new Dimension(w, super.getPreferredSize().height);
             }
-            @Override public Dimension getMaximumSize() {
-                return getPreferredSize();
-            }
+            @Override public Dimension getMaximumSize() { return getPreferredSize(); }
         };
-        pane.setEditorKit(new WrapEditorKit()); // bẻ giữa từ dài (URL/chuỗi liền)
+        pane.setEditorKit(new WrapEditorKit());
         pane.setEditable(false);
+        makeNonInteractive(pane); // chặn focus/bôi đen/con trỏ soạn thảo
         pane.setOpaque(false);
-        pane.setForeground(AppColors.TEXT_NORMAL);
-        pane.setFont(AppFonts.BODY);
         pane.setAlignmentX(Component.LEFT_ALIGNMENT);
         pane.setBorder(BorderFactory.createEmptyBorder(topPadding, 0, 0, 0));
-        EmojiHelper.renderTextWithEmojis(pane, content);
+        EmojiHelper.renderTextWithEmojis(pane, raw);
+
+        //CLICK VÀO TAG MENTION @USERNAME
+        pane.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                JTextPane textPane = (JTextPane) e.getSource();
+                int pos = textPane.viewToModel2D(e.getPoint());
+                if (pos >= 0) {
+                    try {
+                        int start = javax.swing.text.Utilities.getWordStart(textPane, pos);
+                        int end = javax.swing.text.Utilities.getWordEnd(textPane, pos);
+                        String word = textPane.getText(start, end - start).trim();
+
+                        if (start > 0 && textPane.getText(start - 1, 1).equals("@")) {
+                            word = "@" + word;
+                        }
+
+                        if (word.startsWith("@") && word.length() > 1) {
+                            String targetUser = word.substring(1);
+                            // Bỏ qua nếu click vào @all
+                            if (targetUser.equalsIgnoreCase("all")) return;
+
+                            Window owner = SwingUtilities.getWindowAncestor(ChatMessageItem.this);
+                            if (owner instanceof Frame) {
+                                new UserProfileDialog((Frame) owner, targetUser).setVisible(true);
+                            }
+                        }
+                    } catch (Exception ex) {
+                        // ignore
+                    }
+                }
+            }
+        });
+        // ---------------------------------------------------
+
+        try {
+            javax.swing.text.StyledDocument doc = pane.getStyledDocument();
+            String docText = doc.getText(0, doc.getLength());
+
+            javax.swing.text.SimpleAttributeSet mentionStyle = new javax.swing.text.SimpleAttributeSet();
+            javax.swing.text.StyleConstants.setForeground(mentionStyle, new Color(88, 101, 242));
+            javax.swing.text.StyleConstants.setBold(mentionStyle, true);
+
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("@[\\p{L}\\p{N}_]+");
+            java.util.regex.Matcher matcher = pattern.matcher(docText);
+
+            while (matcher.find()) {
+                doc.setCharacterAttributes(matcher.start(), matcher.end() - matcher.start(), mentionStyle, false);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         return pane;
+    }
+
+    /**
+     * Biến JTextPane chỉ-đọc thành "không tương tác": không nhận focus, không bôi đen,
+     * không hiện con trỏ soạn thảo. Dùng cho thân tin nhắn (chỉ hiển thị + render emoji).
+     */
+    private static void makeNonInteractive(JTextPane pane) {
+        pane.setFocusable(false);
+        pane.setHighlighter(null);            // bỏ chọn/bôi đen text
+        pane.getCaret().setVisible(false);    // ẩn con trỏ nhấp nháy
+        pane.setCursor(Cursor.getDefaultCursor()); // không hiện con trỏ chữ "I"
     }
 
     /**
@@ -202,6 +265,23 @@ public class ChatMessageItem extends JPanel {
      */
     private void buildChatLayout(MessageDTO message, boolean compact) {
         String senderName = message.getSender();
+
+        // --- BẮT SỰ KIỆN CLICK MỞ PROFILE CHO AVATAR VÀ SENDER NAME ---
+        MouseAdapter openProfileAdapter = new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                // Bỏ qua các tin nhắn từ hệ thống
+                if (senderName == null || senderName.isEmpty() ||
+                        "SYSTEM".equals(senderName) || "admin".equalsIgnoreCase(senderName)) {
+                    return;
+                }
+                Window owner = SwingUtilities.getWindowAncestor(ChatMessageItem.this);
+                if (owner instanceof Frame) {
+                    new UserProfileDialog((Frame) owner, senderName).setVisible(true);
+                }
+            }
+        };
+        // --------------------------------------------------------------
 
         // WEST: avatar đầy đủ, hoặc spacer canh lề khi gộp nhóm
         JComponent west;
@@ -218,6 +298,11 @@ public class ChatMessageItem extends JPanel {
             String initial = senderName != null && !senderName.isEmpty()
                     ? senderName.substring(0, 1).toUpperCase() : "?";
             avatar = new AvatarBadge(initial, col);
+
+            // Đính kèm sự kiện click Profile
+            avatar.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            avatar.addMouseListener(openProfileAdapter);
+
             JPanel avatarWrapper = new JPanel(new BorderLayout());
             avatarWrapper.setOpaque(false);
             avatarWrapper.add(avatar, BorderLayout.NORTH);
@@ -238,14 +323,29 @@ public class ChatMessageItem extends JPanel {
             JLabel senderLabel = new JLabel(senderName);
             senderLabel.setFont(AppFonts.BODY_BOLD);
             senderLabel.setForeground(AppColors.avatarColorFor(senderName));
+
+            String localNickname = gui.utils.NicknameManager.getNickname(senderName);
+            if (localNickname != null) {
+                senderLabel.setText(localNickname);
+            }
+
+            // Đính kèm sự kiện click Profile
+            senderLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            senderLabel.addMouseListener(openProfileAdapter);
+
             headerRow.add(senderLabel);
 
             // #1: ProfileLoader (cache + gộp request trùng) → tối đa 1 HTTP/user thay vì 1/tin nhắn
             final AvatarBadge avatarRef = avatar;
             gui.utils.ProfileLoader.load(senderName, profile -> {
                 if (profile == null) return;
-                Object dn = profile.get("displayName");
-                if (dn != null && !dn.toString().isBlank()) senderLabel.setText(dn.toString());
+
+                // 2. Chỉ nạp DisplayName từ API nếu NGƯỜI DÙNG KHÔNG CÓ BIỆT DANH
+                if (gui.utils.NicknameManager.getNickname(senderName) == null) {
+                    Object dn = profile.get("displayName");
+                    if (dn != null && !dn.toString().isBlank()) senderLabel.setText(dn.toString());
+                }
+
                 Object av = profile.get("avatarUrl");
                 if (av != null && avatarRef != null) {
                     String url = av.toString();
@@ -289,6 +389,21 @@ public class ChatMessageItem extends JPanel {
             contentPanel.add(headerRow);
         }
 
+        if (message.getReplyToMessageId() != null) {
+            String snippet = message.getReplyToContent();
+            if (snippet != null && snippet.length() > 100) {
+                snippet = snippet.substring(0, 100) + "...";
+            }
+            JLabel replyLabel = new JLabel("<html><i>Trả lời " + message.getReplyToSender() + ": " + snippet + "</i></html>");
+            replyLabel.setFont(AppFonts.TINY);
+            replyLabel.setForeground(AppColors.TEXT_MUTED);
+            replyLabel.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(0, 2, 0, 0, AppColors.TEXT_MUTED),
+                    BorderFactory.createEmptyBorder(0, 6, 2, 0)
+            ));
+            contentPanel.add(replyLabel);
+        }
+
         // Body chung: đính kèm (ảnh/file) hay text (emoji + wrap)
         Attachment att = parseAttachment(message.getContent());
         this.isAttachment = att != null;
@@ -313,6 +428,8 @@ public class ChatMessageItem extends JPanel {
 
         add(west, BorderLayout.WEST);
         add(centerWrap, BorderLayout.CENTER);
+
+
     }
 
     private void addEditedBadge() {
@@ -334,7 +451,8 @@ public class ChatMessageItem extends JPanel {
         boolean canEdit = isOwn && !isAttachment;
         boolean canPin = canManage;
         boolean canDelete = isOwn || canManage;
-        boolean hasActions = canEdit || canPin || canDelete;
+        boolean canReply = !isSystemMsg;
+        boolean hasActions = canEdit || canPin || canDelete || canReply;
 
         // Tin compact (ẩn giờ ở header) sẽ hiện giờ nhỏ khi hover. Tin đầu nhóm đã có giờ ở header.
         boolean showHoverTime = isConsecutive && message.getTimestamp() != null;
@@ -369,8 +487,14 @@ public class ChatMessageItem extends JPanel {
             toolbar.add(timeLabel);
         }
 
-        if (hasActions) {
-            IconButton moreBtn = new IconButton("⋯", null);
+        if (canReply) {
+            IconButton replyBtn = new IconButton("↩", e -> { if (actions != null) actions.onReply(message); });
+            replyBtn.setToolTipText("Trả lời");
+            toolbar.add(replyBtn);
+        }
+
+        if (canEdit || canPin || canDelete) {
+            IconButton moreBtn = new IconButton(AppIcons.ellipsis(14), null);
             moreBtn.setToolTipText("Tùy chọn");
             moreBtn.addActionListener(e -> showActionMenu(moreBtn, canEdit, canPin, canDelete));
             toolbar.add(moreBtn);
@@ -390,9 +514,9 @@ public class ChatMessageItem extends JPanel {
     /** Mở menu hành động (Sửa/Ghim/Xóa) ngay dưới nút "⋯". */
     private void showActionMenu(JComponent anchor, boolean canEdit, boolean canPin, boolean canDelete) {
         JPopupMenu menu = new JPopupMenu();
-        if (canEdit) menu.add(actionItem("✏  Sửa", this::startEditing));
-        if (canPin) menu.add(actionItem("📌  Ghim", () -> { if (actions != null) actions.onPin(message); }));
-        if (canDelete) menu.add(actionItem("🗑  Xóa", this::confirmDelete));
+        if (canEdit) menu.add(actionItem("  Sửa tin nhắn", this::startEditing));
+        if (canPin) menu.add(actionItem("  Ghim tin nhắn", () -> { if (actions != null) actions.onPin(message); }));
+        if (canDelete) menu.add(actionItem("  Xóa tin nhắn", this::confirmDelete));
 
         menuOpen = true; // giữ toolbar hiện trong lúc menu mở (chuột rời item không ẩn nút)
         menu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
@@ -496,7 +620,28 @@ public class ChatMessageItem extends JPanel {
     /** Cập nhật nội dung khi nhận broadcast EDIT từ server. */
     public void updateContent(String newContent, boolean edited) {
         if (messageBody != null) {
-            EmojiHelper.renderTextWithEmojis(messageBody, newContent); // giữ render emoji
+            messageBody.setText(newContent);
+            try {
+                javax.swing.text.SimpleAttributeSet normalStyle = new javax.swing.text.SimpleAttributeSet();
+                javax.swing.text.StyleConstants.setForeground(normalStyle, AppColors.TEXT_NORMAL);
+
+                javax.swing.text.SimpleAttributeSet mentionStyle = new javax.swing.text.SimpleAttributeSet();
+                javax.swing.text.StyleConstants.setForeground(mentionStyle, new Color(88, 101, 242));
+                javax.swing.text.StyleConstants.setBold(mentionStyle, true);
+
+                javax.swing.text.StyledDocument doc = messageBody.getStyledDocument();
+                doc.setCharacterAttributes(0, doc.getLength(), normalStyle, true);
+
+                // FIX LỖI OFFSET TƯƠNG TỰ BÊN TRÊN
+                String docText = doc.getText(0, doc.getLength());
+                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("@[\\p{L}\\p{N}_.]+");
+                java.util.regex.Matcher matcher = pattern.matcher(docText);
+
+                while (matcher.find()) {
+                    doc.setCharacterAttributes(matcher.start(), matcher.end() - matcher.start(), mentionStyle, false);
+                }
+            } catch (Exception e) {}
+
             messageBody.revalidate();
         }
         message.setContent(newContent);
@@ -731,8 +876,8 @@ public class ChatMessageItem extends JPanel {
         card.setAlignmentX(Component.LEFT_ALIGNMENT);
         card.setMaximumSize(new Dimension(340, 68));
 
-        JLabel icon = new JLabel(fileEmoji(att.name));
-        icon.setFont(AppFonts.EMOJI);
+        // Icon file: thay emoji (dễ bị ô vuông) bằng badge màu + text viết tắt
+        JLabel icon = buildFileIconLabel(att.name);
         card.add(icon, BorderLayout.WEST);
 
         JPanel center = new JPanel();
@@ -750,7 +895,7 @@ public class ChatMessageItem extends JPanel {
         center.add(size);
         card.add(center, BorderLayout.CENTER);
 
-        IconButton download = new IconButton("⬇", e -> downloadFile(att));
+        IconButton download = new IconButton(AppIcons.download(16), e -> downloadFile(att));
         download.setToolTipText("Tải xuống");
         JPanel dlWrap = new JPanel(new BorderLayout());
         dlWrap.setOpaque(false);
@@ -761,45 +906,22 @@ public class ChatMessageItem extends JPanel {
     }
 
     private ImageIcon loadScaledIcon(String fullUrl, int maxW, int maxH) {
-        if (fullUrl == null) return null;
-        try {
-            byte[] bytes = new FileApiClient().download(fullUrl); // JWT qua header, chặn host lạ
-            BufferedImage src = ImageIO.read(new ByteArrayInputStream(bytes));
-            if (src == null) return null;
-            int w = src.getWidth(), h = src.getHeight();
-            double scale = Math.min(1.0, Math.min(maxW / (double) w, maxH / (double) h));
-            int nw = Math.max(1, (int) Math.round(w * scale));
-            int nh = Math.max(1, (int) Math.round(h * scale));
-            Image scaled = src.getScaledInstance(nw, nh, Image.SCALE_SMOOTH);
-            return new ImageIcon(scaled);
-        } catch (Exception e) {
-            return null;
-        }
+        return ImageViewer.loadScaled(fullUrl, maxW, maxH); // dùng chung loader (DRY)
     }
 
     private void openFullImage(Attachment att) {
-        Window owner = SwingUtilities.getWindowAncestor(this);
-        JDialog dlg = new JDialog(owner, att.name != null ? att.name : "Ảnh", Dialog.ModalityType.MODELESS);
-        JLabel label = new JLabel("Đang tải…", SwingConstants.CENTER);
-        label.setForeground(AppColors.TEXT_MUTED);
-        dlg.setContentPane(new JScrollPane(label));
-        dlg.setSize(720, 580);
-        dlg.setLocationRelativeTo(owner);
+        ImageViewer.open(this, att.url, att.name); // dialog xem ảnh dùng chung
+    }
 
-        new SwingWorker<ImageIcon, Void>() {
-            @Override protected ImageIcon doInBackground() { return loadScaledIcon(att.url, 1200, 900); }
-            @Override protected void done() {
-                try {
-                    ImageIcon ic = get();
-                    if (ic != null) { label.setText(null); label.setIcon(ic); }
-                    else label.setText("[Không tải được ảnh]");
-                } catch (Exception e) {
-                    if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-                    label.setText("[Lỗi tải ảnh]");
-                }
-            }
-        }.execute();
-        dlg.setVisible(true);
+    /**
+     * Trích {@link ChannelAttachment} từ 1 tin nhắn có đính kèm (cho sidebar DM, vốn không có channelId).
+     * URL trong content đã là URL đầy đủ qua gateway. Trả null nếu tin không phải attachment.
+     */
+    public static ChannelAttachment toChannelAttachment(MessageDTO m) {
+        if (m == null) return null;
+        Attachment a = parseAttachment(m.getContent());
+        if (a == null) return null;
+        return new ChannelAttachment(a.contentType, a.name, a.url, a.thumbnailUrl, a.size, m.getTimestamp());
     }
 
     private void downloadFile(Attachment att) {
@@ -830,18 +952,22 @@ public class ChatMessageItem extends JPanel {
     }
 
     private String humanSize(long b) {
-        if (b <= 0) return "";
-        if (b < 1024) return b + " B";
-        if (b < 1024 * 1024) return String.format("%.1f KB", b / 1024.0);
-        return String.format("%.1f MB", b / (1024.0 * 1024));
+        return FileBadge.humanSize(b); // dùng chung (DRY)
     }
 
+    /** Badge icon cho loại tệp — không dùng emoji (tránh ô vuông). */
+    private JLabel buildFileIconLabel(String name) {
+        return FileBadge.make(name, 38); // badge dùng chung (DRY)
+    }
+
+    /** @deprecated Thay bằng buildFileIconLabel() */
+    @SuppressWarnings("unused")
     private String fileEmoji(String name) {
         String n = name == null ? "" : name.toLowerCase();
-        if (n.endsWith(".pdf")) return "📕";
-        if (n.endsWith(".zip") || n.endsWith(".rar") || n.endsWith(".7z")) return "📦";
-        if (n.endsWith(".doc") || n.endsWith(".docx")) return "📝";
-        if (n.endsWith(".xls") || n.endsWith(".xlsx") || n.endsWith(".csv")) return "📊";
-        return "📄";
+        if (n.endsWith(".pdf")) return "PDF";
+        if (n.endsWith(".zip") || n.endsWith(".rar") || n.endsWith(".7z")) return "ZIP";
+        if (n.endsWith(".doc") || n.endsWith(".docx")) return "DOC";
+        if (n.endsWith(".xls") || n.endsWith(".xlsx") || n.endsWith(".csv")) return "XLS";
+        return "FILE";
     }
 }

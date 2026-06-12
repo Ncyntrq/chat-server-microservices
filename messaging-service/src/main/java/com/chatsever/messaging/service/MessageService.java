@@ -6,9 +6,15 @@ import com.chatsever.common.enums.MessageType;
 import com.chatsever.messaging.client.RoleClient;
 import com.chatsever.messaging.client.ServerServiceClient;
 import com.chatsever.messaging.entity.ChatMessage;
+import com.chatsever.messaging.entity.MessageReaction;
 import com.chatsever.messaging.repository.MessageRepository;
+import com.chatsever.messaging.repository.MessageReactionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -32,17 +38,21 @@ public class MessageService {
     private final ObjectMapper objectMapper;
     private final ServerServiceClient serverServiceClient;
     private final MessageRepository messageRepository;
+    private final MessageReactionRepository reactionRepository;
     private final RoleClient roleClient;
     private final String presenceUrl;
+    private final String channelUrl;
 
-    public MessageService(RestTemplate restTemplate, RabbitTemplate rabbitTemplate, ObjectMapper objectMapper, ServerServiceClient serverServiceClient, MessageRepository messageRepository, RoleClient roleClient, @Value("${services.presence-url}") String presenceUrl) {
+    public MessageService(RestTemplate restTemplate, RabbitTemplate rabbitTemplate, ObjectMapper objectMapper, ServerServiceClient serverServiceClient, MessageRepository messageRepository, MessageReactionRepository reactionRepository, RoleClient roleClient, @Value("${services.presence-url}") String presenceUrl, @Value("${services.channel-url}") String channelUrl) {
         this.restTemplate = restTemplate;
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
         this.serverServiceClient = serverServiceClient;
         this.messageRepository = messageRepository;
+        this.reactionRepository = reactionRepository;
         this.roleClient = roleClient;
         this.presenceUrl = presenceUrl;
+        this.channelUrl = channelUrl;
     }
 
     // Kiểm tra quyền của User — nếu chưa là member, tự động thêm vào server
@@ -191,7 +201,19 @@ public class MessageService {
         entity.setTimestamp(msg.getTimestamp() != null ? msg.getTimestamp() : LocalDateTime.now());
         entity.setType(msg.getType());
         entity.setIsEdited(msg.getIsEdited() != null ? msg.getIsEdited() : false);
-        return messageRepository.save(entity);
+        entity.setReplyToMessageId(msg.getReplyToMessageId());
+        
+        ChatMessage saved = messageRepository.save(entity);
+        msg.setMessageId(saved.getId());
+
+        // Lấy thông tin tin nhắn gốc để gán vào DTO
+        if (msg.getReplyToMessageId() != null) {
+            messageRepository.findById(msg.getReplyToMessageId()).ifPresent(original -> {
+                msg.setReplyToSender(original.getSender());
+                msg.setReplyToContent(original.getContent());
+            });
+        }
+        return saved;
     }
 
     public ChatMessage updateMessage(Long messageId, String newContent) {
@@ -209,7 +231,20 @@ public class MessageService {
         if (entity != null) {
             entity.setContent("Tin nhắn bị gỡ");
             entity.setIsEdited(true);
-            return messageRepository.save(entity);
+            ChatMessage saved = messageRepository.save(entity);
+
+            // Bỏ ghim nếu tin nhắn này đang được ghim
+            if (entity.getChannelId() != null) {
+                try {
+                    String url = channelUrl + "/api/channels/" + entity.getChannelId() + "/pins/" + messageId;
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.set("X-User-Id", "system"); // Bypass quyền
+                    restTemplate.exchange(url, HttpMethod.DELETE, new HttpEntity<>(headers), Void.class);
+                } catch (Exception e) {
+                    logger.error("Lỗi khi xóa ghim tin nhắn bị xóa: {}", e.getMessage());
+                }
+            }
+            return saved;
         }
         return null;
     }
@@ -238,5 +273,30 @@ public class MessageService {
             }
         }
         return false;
+    }
+
+    // --- Reactions ---
+    @org.springframework.transaction.annotation.Transactional
+    public void addReaction(Long messageId, String userId, String emoji) {
+        if (reactionRepository.findByMessageIdAndUserIdAndEmoji(messageId, userId, emoji).isEmpty()) {
+            reactionRepository.save(new MessageReaction(messageId, userId, emoji));
+            broadcastReactionEvent(messageId, emoji, "ADD");
+        }
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public void removeReaction(Long messageId, String userId, String emoji) {
+        reactionRepository.deleteByMessageIdAndUserIdAndEmoji(messageId, userId, emoji);
+        broadcastReactionEvent(messageId, emoji, "REMOVE");
+    }
+
+    private void broadcastReactionEvent(Long messageId, String emoji, String action) {
+        messageRepository.findById(messageId).ifPresent(msg -> {
+            MessageDTO event = new MessageDTO(MessageType.REACT, "SYSTEM", null, action + ":" + emoji, LocalDateTime.now());
+            event.setMessageId(messageId);
+            event.setChannelId(msg.getChannelId());
+            event.setServerId(msg.getServerId());
+            broadcastToChannel(event);
+        });
     }
 }

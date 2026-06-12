@@ -22,8 +22,7 @@ public class OutboundMessageController {
         this.feedback = feedback;
     }
 
-    /** Gửi tin chat (kênh) hoặc tin riêng (DM) tùy ngữ cảnh đang mở. */
-    public void sendChat(String text, long activeChannelId, long activeServerId, String activePrivateUser) {
+    public void sendChat(String text, long activeChannelId, long activeServerId, String activePrivateUser, Long replyToMessageId) {
         MessageDTO out;
         if (activeChannelId == -1 && activePrivateUser != null) {
             out = new MessageDTO(MessageType.PRIVATE, sessionUsername, null, text, LocalDateTime.now());
@@ -32,6 +31,9 @@ public class OutboundMessageController {
             out = new MessageDTO(MessageType.CHAT, sessionUsername, null, text, LocalDateTime.now());
             out.setServerId(activeServerId);
             out.setChannelId(activeChannelId);
+        }
+        if (replyToMessageId != null) {
+            out.setReplyToMessageId(replyToMessageId);
         }
         sendWithError(out, "Gửi thất bại: ");
     }
