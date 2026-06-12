@@ -80,7 +80,8 @@ public class AvatarBadge extends JPanel {
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
         g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-        // Thay đổi TEXT_ANTIALIASING để tránh viền rỗ/gai (fringing) khi vẽ trên nền trong suốt (Opaque=false)
+        // Thay đổi TEXT_ANTIALIASING để tránh viền rỗ/gai (fringing) khi vẽ trên nền
+        // trong suốt (Opaque=false)
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
         int w = getWidth();

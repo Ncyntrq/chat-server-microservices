@@ -6,12 +6,15 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 /**
  * DTO tin nhắn WebSocket giữa client ↔ server.
  * Field null sẽ bị bỏ khỏi JSON nhờ @JsonInclude(NON_NULL).
  * KHÔNG chứa token — JWT chỉ truyền qua query param lúc WS handshake.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class MessageDTO {
 
     private MessageType type;       // Loại tin: CHAT, PRIVATE, SYSTEM, ...
@@ -22,6 +25,10 @@ public class MessageDTO {
     private Long serverId;          // ID của server
     private Boolean isEdited;       // Cờ đánh dấu tin nhắn đã chỉnh sửa
     private Long messageId;         // ID của tin nhắn (dùng cho EDIT/DELETE)
+    private Long replyToMessageId;  // ID của tin nhắn đang trả lời
+    private String replyToSender;   // Tên người gửi tin nhắn gốc
+    private String replyToContent;  // Nội dung tin nhắn gốc được trích dẫn
+
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime timestamp;
 
@@ -64,4 +71,46 @@ public class MessageDTO {
 
     public Long getMessageId() { return messageId; }
     public void setMessageId(Long messageId) { this.messageId = messageId; }
+
+    public Long getReplyToMessageId() { return replyToMessageId; }
+    public void setReplyToMessageId(Long replyToMessageId) { this.replyToMessageId = replyToMessageId; }
+
+    public String getReplyToSender() { return replyToSender; }
+    public void setReplyToSender(String replyToSender) { this.replyToSender = replyToSender; }
+
+    public String getReplyToContent() { return replyToContent; }
+    public void setReplyToContent(String replyToContent) { this.replyToContent = replyToContent; }
+
+    private java.util.List<ReactionDTO> reactions;
+    public java.util.List<ReactionDTO> getReactions() { return reactions; }
+    public void setReactions(java.util.List<ReactionDTO> reactions) { this.reactions = reactions; }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ReactionDTO {
+        private String userId;
+        private String emoji;
+        private int count = 1;
+
+        public ReactionDTO() {}
+
+        public ReactionDTO(String userId, String emoji) {
+            this.userId = userId;
+            this.emoji = emoji;
+            this.count = 1;
+        }
+
+        public ReactionDTO(String userId, String emoji, int count) {
+            this.userId = userId;
+            this.emoji = emoji;
+            this.count = count;
+        }
+
+        public String getUserId() { return userId; }
+        public void setUserId(String userId) { this.userId = userId; }
+        public String getEmoji() { return emoji; }
+        public void setEmoji(String emoji) { this.emoji = emoji; }
+        public int getCount() { return count; }
+        public void setCount(int count) { this.count = count; }
+    }
 }

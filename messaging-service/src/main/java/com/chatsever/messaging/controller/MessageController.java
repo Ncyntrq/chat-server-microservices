@@ -15,9 +15,11 @@ import java.util.List;
 public class MessageController {
     
     private final MessageRepository messageRepository;
+    private final com.chatsever.messaging.service.MessageService messageService;
 
-    public MessageController(MessageRepository messageRepository) {
+    public MessageController(MessageRepository messageRepository, com.chatsever.messaging.service.MessageService messageService) {
         this.messageRepository = messageRepository;
+        this.messageService = messageService;
     }
     
     @GetMapping("/{channelId}/messages")
@@ -35,7 +37,32 @@ public class MessageController {
             messages = messageRepository.findByChannelIdOrderByIdDesc(channelId, pageable);
         }
         
+        populateReplyInfo(messages);
+        
         return ResponseEntity.ok(messages);
+    }
+
+    private void populateReplyInfo(List<ChatMessage> messages) {
+        java.util.List<Long> replyIds = messages.stream()
+                .map(ChatMessage::getReplyToMessageId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .collect(java.util.stream.Collectors.toList());
+
+        if (!replyIds.isEmpty()) {
+            java.util.Map<Long, ChatMessage> replyMap = messageRepository.findAllById(replyIds).stream()
+                    .collect(java.util.stream.Collectors.toMap(ChatMessage::getId, m -> m));
+
+            for (ChatMessage msg : messages) {
+                if (msg.getReplyToMessageId() != null) {
+                    ChatMessage original = replyMap.get(msg.getReplyToMessageId());
+                    if (original != null) {
+                        msg.setReplyToSender(original.getSender());
+                        msg.setReplyToContent(original.getContent());
+                    }
+                }
+            }
+        }
     }
 
     // Lấy nhiều tin nhắn theo IDs (dùng cho tính năng ghim tin nhắn)
@@ -63,6 +90,10 @@ public class MessageController {
         } else {
             results = List.of();
         }
+        
+        populateReplyInfo(results);
+        
         return ResponseEntity.ok(results);
     }
+
 }

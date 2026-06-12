@@ -52,10 +52,13 @@ public class ClientApplication {
     }
 
     /**
-     * Đổi theme NGAY tại chỗ (không rebuild cửa sổ, không reconnect WS / reload dữ liệu):
+     * Đổi theme NGAY tại chỗ (không rebuild cửa sổ, không reconnect WS / reload dữ
+     * liệu):
      * - đổi Look&Feel FlatLaf (cập nhật component chuẩn qua updateUI);
-     * - remap các màu nền/chữ trung tính đã set lúc dựng (qua {@link AppColors#buildRemap});
-     * - component tự vẽ (tin nhắn, wallpaper, toolbar) đọc màu/theme mỗi lần repaint nên tự cập nhật.
+     * - remap các màu nền/chữ trung tính đã set lúc dựng (qua
+     * {@link AppColors#buildRemap});
+     * - component tự vẽ (tin nhắn, wallpaper, toolbar) đọc màu/theme mỗi lần
+     * repaint nên tự cập nhật.
      * Có hiệu ứng chuyển mượt của FlatLaf (crossfade).
      */
     public static void applyThemeLive(Theme newTheme) {
@@ -67,18 +70,30 @@ public class ClientApplication {
         } catch (Exception e) {
             System.err.println("Couldn't switch Laf: " + e);
         }
-        for (Window w : Window.getWindows()) remapColors(w, remap);
+        for (Window w : Window.getWindows())
+            remapColors(w, remap);
         FlatLaf.updateUI();
     }
 
-    /** Đệ quy đổi background/foreground theo bản đồ remap (chỉ các màu khớp đúng). */
+    /**
+     * Đệ quy đổi background/foreground theo bản đồ remap (chỉ các màu khớp đúng).
+     */
     private static void remapColors(Component c, Map<Color, Color> m) {
         Color bg = c.getBackground();
-        if (bg != null) { Color nb = m.get(bg); if (nb != null) c.setBackground(nb); }
+        if (bg != null) {
+            Color nb = m.get(bg);
+            if (nb != null)
+                c.setBackground(nb);
+        }
         Color fg = c.getForeground();
-        if (fg != null) { Color nf = m.get(fg); if (nf != null) c.setForeground(nf); }
+        if (fg != null) {
+            Color nf = m.get(fg);
+            if (nf != null)
+                c.setForeground(nf);
+        }
         if (c instanceof Container ct) {
-            for (Component child : ct.getComponents()) remapColors(child, m);
+            for (Component child : ct.getComponents())
+                remapColors(child, m);
         }
     }
 }

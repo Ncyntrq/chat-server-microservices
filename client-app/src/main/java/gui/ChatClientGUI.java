@@ -84,6 +84,10 @@ public class ChatClientGUI extends JFrame {
         @Override public void onEdit(MessageDTO msg, String newContent) { outbound.sendEdit(msg, newContent); }
         @Override public void onDelete(MessageDTO msg) { outbound.sendDelete(msg); }
         @Override public void onPin(MessageDTO msg) { pinController.pin(msg); }
+        @Override public void onReply(MessageDTO msg) {
+            chatInput.setReplyContext(msg.getMessageId(), msg.getSender(), msg.getContent());
+            chatInput.getInputArea().requestFocusInWindow();
+        }
     };
 
     public ChatClientGUI(String sessionUsername) {
@@ -578,7 +582,7 @@ public class ChatClientGUI extends JFrame {
             Toast.warn(this, "WebSocket not ready, message not sent");
             return;
         }
-        outbound.sendChat(text, activeChannelId, activeServerId, activePrivateUser);
+        outbound.sendChat(text, activeChannelId, activeServerId, activePrivateUser, chatInput.getReplyToMessageId());
         chatInput.clearInput();
     }
 
@@ -645,6 +649,9 @@ public class ChatClientGUI extends JFrame {
             case PING, PONG -> { /* ignore */ }
             case LIST -> {
                 if (msg.getContent() != null) setOnlineUsers(List.of(msg.getContent().split(",")));
+            }
+            case REACT -> {
+                if (belongsToActiveChannel(msg)) chatHistoryView.applyReaction(msg);
             }
             default -> {
                 if (belongsToActiveChannel(msg)) chatHistoryView.appendMessage(msg);

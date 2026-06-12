@@ -22,6 +22,12 @@ public class ChatInputContainer extends JPanel {
     private final JScrollPane inputScroll;
     private final JButton sendButton;
     private final JProgressBar uploadBar;
+    
+    // --- Reply panel ---
+    private JPanel replyPreviewPanel;
+    private JLabel replyLabel;
+    private Long replyToMessageId;
+    
     private Runnable onAttach = () -> {};
     private Runnable onSend = () -> {};
     private final JPopupMenu mentionPopup = new JPopupMenu();
@@ -202,8 +208,28 @@ public class ChatInputContainer extends JPanel {
         uploadBar.setBackground(AppColors.BG_TERTIARY);
         uploadBar.setPreferredSize(new Dimension(0, 3));
 
+        // --- Reply Preview Panel ---
+        replyPreviewPanel = new JPanel(new BorderLayout());
+        replyPreviewPanel.setBackground(AppColors.BG_SECONDARY);
+        replyPreviewPanel.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+        replyPreviewPanel.setVisible(false);
+
+        replyLabel = new JLabel();
+        replyLabel.setFont(AppFonts.CAPTION_BOLD);
+        replyLabel.setForeground(AppColors.TEXT_NORMAL);
+        replyPreviewPanel.add(replyLabel, BorderLayout.CENTER);
+
+        IconButton cancelReplyBtn = new IconButton("✕", e -> clearReplyContext());
+        cancelReplyBtn.setForeground(AppColors.TEXT_MUTED);
+        replyPreviewPanel.add(cancelReplyBtn, BorderLayout.EAST);
+
+        JPanel topWrap = new JPanel(new BorderLayout());
+        topWrap.setOpaque(false);
+        topWrap.add(replyPreviewPanel, BorderLayout.CENTER);
+        topWrap.add(uploadBar, BorderLayout.SOUTH);
+
         // --- Assemble ---
-        add(uploadBar, BorderLayout.NORTH);
+        add(topWrap, BorderLayout.NORTH);
         add(leftWrap, BorderLayout.WEST);
         add(inputScroll, BorderLayout.CENTER);
         add(rightWrap, BorderLayout.EAST);
@@ -252,8 +278,34 @@ public class ChatInputContainer extends JPanel {
         Insets in = inputArea.getInsets();
         int oneRow = lineH + in.top + in.bottom;
         inputScroll.setPreferredSize(new Dimension(0, oneRow));
+        clearReplyContext();
         revalidate();
         repaint();
+    }
+
+    public void setReplyContext(Long messageId, String senderName, String snippet) {
+        this.replyToMessageId = messageId;
+        String displaySnippet = snippet;
+        if (displaySnippet == null || displaySnippet.trim().isEmpty()) {
+            displaySnippet = "Tệp đính kèm";
+        } else if (displaySnippet.length() > 50) {
+            displaySnippet = displaySnippet.substring(0, 50) + "...";
+        }
+        replyLabel.setText("Đang trả lời " + senderName + ": " + displaySnippet);
+        replyPreviewPanel.setVisible(true);
+        revalidate();
+        repaint();
+    }
+
+    public void clearReplyContext() {
+        this.replyToMessageId = null;
+        replyPreviewPanel.setVisible(false);
+        revalidate();
+        repaint();
+    }
+
+    public Long getReplyToMessageId() {
+        return replyToMessageId;
     }
 
     public JButton getSendButton() {

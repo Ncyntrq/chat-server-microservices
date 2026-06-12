@@ -124,10 +124,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         return;
                     }
                     messageService.deleteMessage(msg.getMessageId());
-                    // Soft Delete: broadcast như EDIT để mọi client cập nhật UI thành "Tin nhắn bị gỡ"
-                    msg.setType(MessageType.EDIT);
+                    // Soft Delete: broadcast DELETE để client cập nhật UI thành "Tin nhắn bị gỡ"
                     msg.setContent("Tin nhắn bị gỡ");
-                    msg.setIsEdited(true);
                     messageService.broadcastToChannel(msg);
                 }
             }
