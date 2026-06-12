@@ -37,6 +37,16 @@ public class ChatMessage {
     @Column(name = "reply_to_message_id")
     private Long replyToMessageId;
 
+    @Transient
+    private String replyToSender;
+
+    @Transient
+    private String replyToContent;
+
+    @OneToMany(fetch = FetchType.EAGER)
+    @JoinColumn(name = "message_id", referencedColumnName = "id", insertable = false, updatable = false)
+    private java.util.List<MessageReaction> reactions;
+
     public ChatMessage() {}
 
     public Long getId() { return id; }
@@ -59,4 +69,10 @@ public class ChatMessage {
     public void setIsEdited(Boolean isEdited) { this.isEdited = isEdited; }
     public Long getReplyToMessageId() { return replyToMessageId; }
     public void setReplyToMessageId(Long replyToMessageId) { this.replyToMessageId = replyToMessageId; }
+    public String getReplyToSender() { return replyToSender; }
+    public void setReplyToSender(String replyToSender) { this.replyToSender = replyToSender; }
+    public String getReplyToContent() { return replyToContent; }
+    public void setReplyToContent(String replyToContent) { this.replyToContent = replyToContent; }
+    public java.util.List<MessageReaction> getReactions() { return reactions; }
+    public void setReactions(java.util.List<MessageReaction> reactions) { this.reactions = reactions; }
 }

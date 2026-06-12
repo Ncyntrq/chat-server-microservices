@@ -650,6 +650,9 @@ public class ChatClientGUI extends JFrame {
             case LIST -> {
                 if (msg.getContent() != null) setOnlineUsers(List.of(msg.getContent().split(",")));
             }
+            case REACT -> {
+                if (belongsToActiveChannel(msg)) chatHistoryView.applyReaction(msg);
+            }
             default -> {
                 if (belongsToActiveChannel(msg)) chatHistoryView.appendMessage(msg);
             }

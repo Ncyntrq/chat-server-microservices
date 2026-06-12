@@ -278,21 +278,27 @@ public class MessageService {
     // --- Reactions ---
     @org.springframework.transaction.annotation.Transactional
     public void addReaction(Long messageId, String userId, String emoji) {
-        if (reactionRepository.findByMessageIdAndUserIdAndEmoji(messageId, userId, emoji).isEmpty()) {
+        java.util.Optional<MessageReaction> opt = reactionRepository.findByMessageIdAndUserIdAndEmoji(messageId, userId, emoji);
+        if (opt.isPresent()) {
+            MessageReaction r = opt.get();
+            r.setCount(r.getCount() + 1);
+            reactionRepository.save(r);
+            broadcastReactionEvent(messageId, emoji, "ADD", userId);
+        } else {
             reactionRepository.save(new MessageReaction(messageId, userId, emoji));
-            broadcastReactionEvent(messageId, emoji, "ADD");
+            broadcastReactionEvent(messageId, emoji, "ADD", userId);
         }
     }
 
     @org.springframework.transaction.annotation.Transactional
     public void removeReaction(Long messageId, String userId, String emoji) {
         reactionRepository.deleteByMessageIdAndUserIdAndEmoji(messageId, userId, emoji);
-        broadcastReactionEvent(messageId, emoji, "REMOVE");
+        broadcastReactionEvent(messageId, emoji, "REMOVE", userId);
     }
 
-    private void broadcastReactionEvent(Long messageId, String emoji, String action) {
+    private void broadcastReactionEvent(Long messageId, String emoji, String action, String userId) {
         messageRepository.findById(messageId).ifPresent(msg -> {
-            MessageDTO event = new MessageDTO(MessageType.REACT, "SYSTEM", null, action + ":" + emoji, LocalDateTime.now());
+            MessageDTO event = new MessageDTO(MessageType.REACT, userId, null, action + ":" + emoji, LocalDateTime.now());
             event.setMessageId(messageId);
             event.setChannelId(msg.getChannelId());
             event.setServerId(msg.getServerId());

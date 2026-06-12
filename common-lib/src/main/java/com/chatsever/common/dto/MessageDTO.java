@@ -80,4 +80,37 @@ public class MessageDTO {
 
     public String getReplyToContent() { return replyToContent; }
     public void setReplyToContent(String replyToContent) { this.replyToContent = replyToContent; }
+
+    private java.util.List<ReactionDTO> reactions;
+    public java.util.List<ReactionDTO> getReactions() { return reactions; }
+    public void setReactions(java.util.List<ReactionDTO> reactions) { this.reactions = reactions; }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ReactionDTO {
+        private String userId;
+        private String emoji;
+        private int count = 1;
+
+        public ReactionDTO() {}
+
+        public ReactionDTO(String userId, String emoji) {
+            this.userId = userId;
+            this.emoji = emoji;
+            this.count = 1;
+        }
+
+        public ReactionDTO(String userId, String emoji, int count) {
+            this.userId = userId;
+            this.emoji = emoji;
+            this.count = count;
+        }
+
+        public String getUserId() { return userId; }
+        public void setUserId(String userId) { this.userId = userId; }
+        public String getEmoji() { return emoji; }
+        public void setEmoji(String emoji) { this.emoji = emoji; }
+        public int getCount() { return count; }
+        public void setCount(int count) { this.count = count; }
+    }
 }

@@ -183,24 +183,48 @@ public class ChatHistoryView extends JScrollPane {
         }
     }
 
-    /** Áp dụng broadcast DELETE: gỡ item khỏi danh sách hiển thị. */
-    public void applyDelete(MessageDTO msg) {
-        if (msg.getMessageId() == null) return;
-        ChatMessageItem item = messageItems.remove(msg.getMessageId());
+    /** Áp dụng broadcast REACT: cập nhật reaction cho tin nhắn. */
+    public void applyReaction(MessageDTO msg) {
+        if (msg.getMessageId() == null || msg.getContent() == null) return;
+        ChatMessageItem item = messageItems.get(msg.getMessageId());
         if (item == null) return;
 
-        Component[] comps = chatHistoryPanel.getComponents();
-        int idx = -1;
-        for (int i = 0; i < comps.length; i++) {
-            if (comps[i] == item) { idx = i; break; }
+        String[] parts = msg.getContent().split(":", 2);
+        if (parts.length < 2) return;
+        String action = parts[0];
+        String emoji = parts[1];
+        String userId = msg.getSender();
+        
+        java.util.List<MessageDTO.ReactionDTO> reactions = item.getMessage().getReactions();
+        if (reactions == null) {
+            reactions = new java.util.ArrayList<>();
+            item.getMessage().setReactions(reactions);
         }
-        if (idx < 0) return;
-        chatHistoryPanel.remove(item);
-        // Xóa luôn strut đệm ngay sau tin nhắn (nếu có)
-        if (idx < chatHistoryPanel.getComponentCount()) {
-            Component next = chatHistoryPanel.getComponent(idx);
-            if (next instanceof Box.Filler) chatHistoryPanel.remove(next);
+
+        if ("ADD".equals(action)) {
+            boolean found = false;
+            for (MessageDTO.ReactionDTO r : reactions) {
+                if (r.getUserId().equals(userId) && r.getEmoji().equals(emoji)) {
+                    r.setCount(r.getCount() + 1);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) reactions.add(new MessageDTO.ReactionDTO(userId, emoji, 1));
+        } else if ("REMOVE".equals(action)) {
+            reactions.removeIf(r -> r.getUserId().equals(userId) && r.getEmoji().equals(emoji));
         }
+
+        item.renderReactions();
+    }
+
+    /** Áp dụng broadcast DELETE: soft-delete — thay nội dung thành "Tin nhắn bị gỡ", ẩn toolbar/reply/reaction. */
+    public void applyDelete(MessageDTO msg) {
+        if (msg.getMessageId() == null) return;
+        ChatMessageItem item = messageItems.get(msg.getMessageId());
+        if (item == null) return;
+
+        item.applySoftDelete();
         chatHistoryPanel.revalidate();
         chatHistoryPanel.repaint();
     }

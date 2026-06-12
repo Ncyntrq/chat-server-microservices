@@ -286,7 +286,9 @@ public class ChatInputContainer extends JPanel {
     public void setReplyContext(Long messageId, String senderName, String snippet) {
         this.replyToMessageId = messageId;
         String displaySnippet = snippet;
-        if (displaySnippet.length() > 50) {
+        if (displaySnippet == null || displaySnippet.trim().isEmpty()) {
+            displaySnippet = "Tệp đính kèm";
+        } else if (displaySnippet.length() > 50) {
             displaySnippet = displaySnippet.substring(0, 50) + "...";
         }
         replyLabel.setText("Đang trả lời " + senderName + ": " + displaySnippet);

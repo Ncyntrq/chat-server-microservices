@@ -37,7 +37,32 @@ public class MessageController {
             messages = messageRepository.findByChannelIdOrderByIdDesc(channelId, pageable);
         }
         
+        populateReplyInfo(messages);
+        
         return ResponseEntity.ok(messages);
+    }
+
+    private void populateReplyInfo(List<ChatMessage> messages) {
+        java.util.List<Long> replyIds = messages.stream()
+                .map(ChatMessage::getReplyToMessageId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .collect(java.util.stream.Collectors.toList());
+
+        if (!replyIds.isEmpty()) {
+            java.util.Map<Long, ChatMessage> replyMap = messageRepository.findAllById(replyIds).stream()
+                    .collect(java.util.stream.Collectors.toMap(ChatMessage::getId, m -> m));
+
+            for (ChatMessage msg : messages) {
+                if (msg.getReplyToMessageId() != null) {
+                    ChatMessage original = replyMap.get(msg.getReplyToMessageId());
+                    if (original != null) {
+                        msg.setReplyToSender(original.getSender());
+                        msg.setReplyToContent(original.getContent());
+                    }
+                }
+            }
+        }
     }
 
     // Lấy nhiều tin nhắn theo IDs (dùng cho tính năng ghim tin nhắn)
@@ -65,26 +90,10 @@ public class MessageController {
         } else {
             results = List.of();
         }
+        
+        populateReplyInfo(results);
+        
         return ResponseEntity.ok(results);
     }
 
-    // Thêm Cảm xúc
-    @PostMapping("/{messageId}/reactions/{emoji}")
-    public ResponseEntity<Void> addReaction(
-            @PathVariable Long messageId,
-            @PathVariable String emoji,
-            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
-        messageService.addReaction(messageId, userId, emoji);
-        return ResponseEntity.ok().build();
-    }
-
-    // Xóa Cảm xúc
-    @DeleteMapping("/{messageId}/reactions/{emoji}")
-    public ResponseEntity<Void> removeReaction(
-            @PathVariable Long messageId,
-            @PathVariable String emoji,
-            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
-        messageService.removeReaction(messageId, userId, emoji);
-        return ResponseEntity.ok().build();
-    }
 }

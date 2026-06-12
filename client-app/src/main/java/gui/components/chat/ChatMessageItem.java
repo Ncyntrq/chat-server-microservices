@@ -53,6 +53,8 @@ public class ChatMessageItem extends JPanel {
     private JPanel headerRow;
     private JTextPane messageBody;
     private JPanel toolbar;
+    private JPanel reactionBadgePanel;
+    private JPanel reactionWrap;
     private boolean editedBadgeShown = false;
 
     /** Layout gọn cho tin nhắn liên tiếp cùng người gửi (gộp nhóm). */
@@ -382,14 +384,16 @@ public class ChatMessageItem extends JPanel {
             timeLabel.setForeground(new Color(0x80, 0x84, 0x8E, 0x99));
             headerRow.add(timeLabel);
 
-            if (Boolean.TRUE.equals(message.getIsEdited())) {
+            boolean isDeleted = "Tin nhắn bị gỡ".equals(message.getContent());
+            if (Boolean.TRUE.equals(message.getIsEdited()) && !isDeleted) {
                 addEditedBadge();
             }
 
             contentPanel.add(headerRow);
         }
 
-        if (message.getReplyToMessageId() != null) {
+        boolean isDeletedMsg = "Tin nhắn bị gỡ".equals(message.getContent());
+        if (message.getReplyToMessageId() != null && !isDeletedMsg) {
             String snippet = message.getReplyToContent();
             if (snippet != null && snippet.length() > 100) {
                 snippet = snippet.substring(0, 100) + "...";
@@ -401,6 +405,16 @@ public class ChatMessageItem extends JPanel {
                     BorderFactory.createMatteBorder(0, 2, 0, 0, AppColors.TEXT_MUTED),
                     BorderFactory.createEmptyBorder(0, 6, 2, 0)
             ));
+            replyLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            replyLabel.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    gui.chat.ChatHistoryView historyView = (gui.chat.ChatHistoryView) SwingUtilities.getAncestorOfClass(gui.chat.ChatHistoryView.class, ChatMessageItem.this);
+                    if (historyView != null) {
+                        historyView.scrollToMessage(message.getReplyToMessageId());
+                    }
+                }
+            });
             contentPanel.add(replyLabel);
         }
 
@@ -414,16 +428,50 @@ public class ChatMessageItem extends JPanel {
             contentPanel.add(messageBody);
         }
 
+        reactionBadgePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0)) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                if (getComponentCount() > 0) {
+                    Graphics2D g2 = (Graphics2D) g.create();
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2.setColor(AppColors.BG_TERTIARY);
+                    g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
+                    g2.setColor(new Color(0, 0, 0, 30));
+                    g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 16, 16);
+                    g2.dispose();
+                }
+                super.paintComponent(g);
+            }
+        };
+        reactionBadgePanel.setOpaque(false);
+        reactionBadgePanel.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
+        
+        // Tạo wrapper để canh lề trái cho reactionBadgePanel
+        reactionWrap = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        reactionWrap.setOpaque(false);
+        reactionWrap.setBorder(BorderFactory.createEmptyBorder(2, 0, 0, 0));
+        reactionWrap.add(reactionBadgePanel);
+        
+        renderReactions();
+
         // Bọc content trong GridBag: content ôm sát (gridx0) + glue đẩy về trái (gridx2).
         // Toolbar sẽ chèn vào gridx1 (cạnh tin) trong buildToolbar. weighty=1 ⇒ căn giữa dọc.
         centerWrap = new JPanel(new GridBagLayout());
         centerWrap.setOpaque(false);
+
+        // Row 0: contentPanel (message body)
         GridBagConstraints cc = new GridBagConstraints();
-        cc.gridx = 0; cc.anchor = GridBagConstraints.WEST; cc.weighty = 1; cc.fill = GridBagConstraints.NONE;
+        cc.gridx = 0; cc.gridy = 0; cc.anchor = GridBagConstraints.WEST; cc.weighty = 1; cc.fill = GridBagConstraints.NONE;
         centerWrap.add(contentPanel, cc);
 
+        // Row 1: reactionWrap — riêng biệt, KHÔNG nằm trong contentPanel
+        // ⇒ không ảnh hưởng chiều rộng bubble
+        GridBagConstraints rc = new GridBagConstraints();
+        rc.gridx = 0; rc.gridy = 1; rc.anchor = GridBagConstraints.WEST; rc.fill = GridBagConstraints.NONE;
+        centerWrap.add(reactionWrap, rc);
+
         GridBagConstraints gl = new GridBagConstraints();
-        gl.gridx = 2; gl.weightx = 1; gl.fill = GridBagConstraints.HORIZONTAL;
+        gl.gridx = 2; gl.gridy = 0; gl.gridheight = 2; gl.weightx = 1; gl.fill = GridBagConstraints.HORIZONTAL;
         centerWrap.add(Box.createHorizontalGlue(), gl);
 
         add(west, BorderLayout.WEST);
@@ -447,6 +495,9 @@ public class ChatMessageItem extends JPanel {
     // Panel hover: [giờ (tin compact)] + nút "⋯" (bấm mở menu Sửa/Ghim/Xóa)
     // ---------------------------------------------------------------
     private void buildHoverBar() {
+        boolean isDeleted = "Tin nhắn bị gỡ".equals(message.getContent());
+        if (isDeleted) return;
+
         boolean canManage = network.PermissionCache.get().can(network.PermissionCache.MANAGE_MESSAGES);
         boolean canEdit = isOwn && !isAttachment;
         boolean canPin = canManage;
@@ -488,6 +539,11 @@ public class ChatMessageItem extends JPanel {
         }
 
         if (canReply) {
+            IconButton reactBtn = new IconButton("☺", null);
+            reactBtn.addActionListener(e -> showReactionMenu(reactBtn));
+            reactBtn.setToolTipText("Thả cảm xúc");
+            toolbar.add(reactBtn);
+
             IconButton replyBtn = new IconButton("↩", e -> { if (actions != null) actions.onReply(message); });
             replyBtn.setToolTipText("Trả lời");
             toolbar.add(replyBtn);
@@ -586,10 +642,97 @@ public class ChatMessageItem extends JPanel {
         int idx = indexInContent(messageBody);
         contentPanel.remove(messageBody);
         contentPanel.add(editField, idx);
-        contentPanel.revalidate();
         contentPanel.repaint();
         editField.requestFocusInWindow();
         editField.selectAll();
+    }
+
+    private void showReactionMenu(JComponent anchor) {
+        JPopupMenu menu = new JPopupMenu();
+        String[] emojis = {"👍", "❤️", "😂", "😮", "😢", "😡"};
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 4, 4));
+        panel.setOpaque(false);
+        for (String em : emojis) {
+            JButton btn = new JButton(em);
+            btn.setFont(AppFonts.EMOJI);
+            btn.setMargin(new Insets(2, 6, 2, 6));
+            btn.setFocusPainted(false);
+            btn.addActionListener(e -> {
+                menu.setVisible(false);
+                try {
+                    network.ReactionApiClient.addReaction(message.getMessageId(), em);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            });
+            panel.add(btn);
+        }
+        menu.add(panel);
+        
+        menuOpen = true;
+        menu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
+            @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {}
+            @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {
+                menuOpen = false;
+                if (!isHovered && toolbar != null) toolbar.setVisible(false);
+                repaint();
+            }
+            @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {}
+        });
+        menu.show(anchor, 0, anchor.getHeight());
+    }
+
+    public void renderReactions() {
+        if (reactionBadgePanel == null) return;
+        reactionBadgePanel.removeAll();
+        java.util.List<MessageDTO.ReactionDTO> reactions = message.getReactions();
+        if (reactions == null || reactions.isEmpty()) {
+            reactionBadgePanel.setVisible(false);
+            return;
+        }
+        reactionBadgePanel.setVisible(true);
+
+        java.util.Map<String, Integer> emojiCounts = new java.util.LinkedHashMap<>();
+        java.util.Map<String, Boolean> meReactedMap = new java.util.HashMap<>();
+
+        for (MessageDTO.ReactionDTO r : reactions) {
+            emojiCounts.put(r.getEmoji(), emojiCounts.getOrDefault(r.getEmoji(), 0) + r.getCount());
+            if (r.getUserId().equals(currentUser)) {
+                meReactedMap.put(r.getEmoji(), true);
+            }
+        }
+
+        for (java.util.Map.Entry<String, Integer> entry : emojiCounts.entrySet()) {
+            String emoji = entry.getKey();
+            int count = entry.getValue();
+            boolean meReacted = meReactedMap.getOrDefault(emoji, false);
+
+            JButton badge = new JButton(emoji + " " + count);
+            badge.setFont(gui.theme.AppFonts.EMOJI_SM);
+            badge.setMargin(new Insets(1, 4, 1, 4));
+            badge.setFocusPainted(false);
+            badge.setBorderPainted(false);
+            badge.setContentAreaFilled(false);
+            badge.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+            if (meReacted) {
+                badge.setForeground(AppColors.BRAND_PRIMARY);
+            } else {
+                badge.setForeground(AppColors.TEXT_MUTED);
+            }
+
+            badge.addActionListener(e -> {
+                try {
+                    // Luôn luôn cộng dồn khi bấm (tương tự Zalo) thay vì xóa
+                    network.ReactionApiClient.addReaction(message.getMessageId(), emoji);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            });
+            reactionBadgePanel.add(badge);
+        }
+        reactionBadgePanel.revalidate();
+        reactionBadgePanel.repaint();
     }
 
     private void finishEditing() {
@@ -649,6 +792,72 @@ public class ChatMessageItem extends JPanel {
             message.setIsEdited(true);
             addEditedBadge();
         }
+    }
+
+    /**
+     * Soft-delete: thay nội dung thành "Tin nhắn bị gỡ", ẩn toolbar, reply quote,
+     * edited badge, và reaction — giống Zalo/Messenger.
+     */
+    public void applySoftDelete() {
+        // 1. Cập nhật nội dung
+        message.setContent("Tin nhắn bị gỡ");
+        message.setIsEdited(false);
+        message.setReplyToMessageId(null);
+        message.setReplyToSender(null);
+        message.setReplyToContent(null);
+        message.setReactions(null);
+
+        if (messageBody != null) {
+            messageBody.setText("Tin nhắn bị gỡ");
+            messageBody.setForeground(AppColors.TEXT_MUTED);
+            try {
+                javax.swing.text.SimpleAttributeSet style = new javax.swing.text.SimpleAttributeSet();
+                javax.swing.text.StyleConstants.setForeground(style, AppColors.TEXT_MUTED);
+                javax.swing.text.StyleConstants.setItalic(style, true);
+                javax.swing.text.StyledDocument doc = messageBody.getStyledDocument();
+                doc.setCharacterAttributes(0, doc.getLength(), style, true);
+            } catch (Exception ignored) {}
+            messageBody.revalidate();
+        }
+
+        // 2. Xóa reply quote khỏi contentPanel
+        for (Component c : contentPanel.getComponents()) {
+            if (c instanceof JLabel) {
+                JLabel lbl = (JLabel) c;
+                String txt = lbl.getText();
+                if (txt != null && txt.contains("Trả lời")) {
+                    contentPanel.remove(c);
+                    break;
+                }
+            }
+        }
+
+        // 3. Xóa edited badge khỏi headerRow
+        if (headerRow != null) {
+            for (Component c : headerRow.getComponents()) {
+                if (c instanceof JLabel && "(đã sửa)".equals(((JLabel) c).getText())) {
+                    headerRow.remove(c);
+                    break;
+                }
+            }
+            editedBadgeShown = false;
+            headerRow.revalidate();
+            headerRow.repaint();
+        }
+
+        // 4. Ẩn toolbar hover
+        if (toolbar != null) {
+            toolbar.setVisible(false);
+            toolbar = null;
+        }
+
+        // 5. Xóa reaction
+        renderReactions();
+
+        contentPanel.revalidate();
+        contentPanel.repaint();
+        revalidate();
+        repaint();
     }
 
     public Long getMessageId() {
@@ -752,7 +961,16 @@ public class ChatMessageItem extends JPanel {
         if (cw <= 0) return null;
         int padX = 12, vInset = 2;
         int x = centerWrap.getX() + contentPanel.getX() - padX;
-        int h = Math.max(getHeight() - 2 * vInset, MIN_BUBBLE_H);
+
+        // Chiều cao bubble = chiều cao contentPanel + padding, KHÔNG bao gồm reactionWrap
+        int contentH = contentPanel.getHeight();
+        int h = Math.max(contentH + 2 * vInset, MIN_BUBBLE_H);
+
+        // Nếu có reaction, kéo dài bubble xuống thêm 10px để tạo hiệu ứng overlap (giống Zalo)
+        if (reactionWrap != null && reactionWrap.isVisible() && reactionBadgePanel.getComponentCount() > 0) {
+            h += 10;
+        }
+
         return new Rectangle(x, vInset, cw + 2 * padX, h);
     }
 
