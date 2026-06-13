@@ -24,12 +24,31 @@ public class LandingFrame extends JFrame {
         root.setBackground(AppColors.BG_PRIMARY);
         root.setBorder(BorderFactory.createEmptyBorder(80, 60, 60, 60));
 
+        try {
+            java.net.URL url = getClass().getResource("/logo/logo.png");
+            if (url != null) {
+                setIconImage(javax.imageio.ImageIO.read(url));
+            }
+        } catch (Exception e) {}
+
         // --- Logo / tên app ---
-        JLabel logo = new JLabel("💬  ChatServer");
-        logo.setFont(new Font("SansSerif", Font.BOLD, 40));
-        logo.setForeground(AppColors.TEXT_WHITE);
-        logo.setAlignmentX(Component.CENTER_ALIGNMENT);
-        root.add(logo);
+        JPanel logoPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 0));
+        logoPanel.setOpaque(false);
+        logoPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        
+        try {
+            java.net.URL url = getClass().getResource("/logo/logo.png");
+            if (url != null) {
+                Image img = javax.imageio.ImageIO.read(url).getScaledInstance(48, 48, Image.SCALE_SMOOTH);
+                logoPanel.add(new JLabel(new ImageIcon(img)));
+            }
+        } catch (Exception e) {}
+
+        JLabel logoText = new JLabel("ChatServer");
+        logoText.setFont(new Font("SansSerif", Font.BOLD, 40));
+        logoText.setForeground(AppColors.TEXT_WHITE);
+        logoPanel.add(logoText);
+        root.add(logoPanel);
         root.add(Box.createVerticalStrut(16));
 
         // --- Mô tả ngắn ---
