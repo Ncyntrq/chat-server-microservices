@@ -57,43 +57,55 @@ public class MessageEventListener {
         //    (Trong thực tế cần lấy danh sách members của channel,
         //     ở đây tạo 1 notification tổng thể)
         if (mentions.contains("everyone")) {
-            notificationService.createNotification(
-                    "ALL",          // userId = ALL (broadcast)
-                    channelId,
-                    serverId,
-                    sender,
-                    NotificationType.MENTION_ALL,
-                    content
-            );
-            log.info("Tạo MENTION_ALL notification từ sender={} channel={}", sender, channelId);
+            // Check if server/channel is muted
+            boolean isMuted = notificationService.isMuted("ALL", "CHANNEL", channelId != null ? channelId.toString() : null) ||
+                              notificationService.isMuted("ALL", "SERVER", serverId != null ? serverId.toString() : null);
+            if (!isMuted) {
+                notificationService.createNotification(
+                        "ALL",          // userId = ALL (broadcast)
+                        channelId,
+                        serverId,
+                        sender,
+                        NotificationType.MENTION_ALL,
+                        content
+                );
+                log.info("Tạo MENTION_ALL notification từ sender={} channel={}", sender, channelId);
+            }
         }
 
         // 3. Nếu có @user cụ thể → tạo notification cho từng user
         for (String mentionedUser : mentions) {
             if (!"everyone".equals(mentionedUser) && !mentionedUser.equals(sender)) {
-                notificationService.createNotification(
-                        mentionedUser,
-                        channelId,
-                        serverId,
-                        sender,
-                        NotificationType.MENTION,
-                        content
-                );
-                log.info("Tạo MENTION notification cho user={} từ sender={} channel={}", mentionedUser, sender, channelId);
+                boolean isMuted = notificationService.isMuted(mentionedUser, "CHANNEL", channelId != null ? channelId.toString() : null) ||
+                                  notificationService.isMuted(mentionedUser, "SERVER", serverId != null ? serverId.toString() : null);
+                if (!isMuted) {
+                    notificationService.createNotification(
+                            mentionedUser,
+                            channelId,
+                            serverId,
+                            sender,
+                            NotificationType.MENTION,
+                            content
+                    );
+                    log.info("Tạo MENTION notification cho user={} từ sender={} channel={}", mentionedUser, sender, channelId);
+                }
             }
         }
 
         // 4. Nếu là tin nhắn riêng (receiver != null) → tạo DM notification
         if (message.getReceiver() != null && !message.getReceiver().isEmpty()) {
-            notificationService.createNotification(
-                    message.getReceiver(),
-                    channelId,
-                    serverId,
-                    sender,
-                    NotificationType.DM,
-                    content
-            );
-            log.info("Tạo DM notification cho user={} từ sender={}", message.getReceiver(), sender);
+            boolean isMuted = notificationService.isMuted(message.getReceiver(), "USER", sender);
+            if (!isMuted) {
+                notificationService.createNotification(
+                        message.getReceiver(),
+                        channelId,
+                        serverId,
+                        sender,
+                        NotificationType.DM,
+                        content
+                );
+                log.info("Tạo DM notification cho user={} từ sender={}", message.getReceiver(), sender);
+            }
             
             // Tăng biến đếm unread count cho tin nhắn DM
             notificationService.incrementUnreadCount(message.getReceiver(), null, null, sender);

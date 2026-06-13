@@ -10,6 +10,9 @@ import com.chatsever.notification.repository.NotificationRepository;
 import com.chatsever.notification.repository.ReadStatusRepository;
 import com.chatsever.notification.repository.UnreadCounterRepository;
 import com.chatsever.notification.model.UnreadCounter;
+import com.chatsever.notification.model.MuteSetting;
+import com.chatsever.notification.dto.MuteRequest;
+import com.chatsever.notification.repository.MuteSettingRepository;
 import org.springframework.web.client.RestTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,14 +41,17 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final ReadStatusRepository readStatusRepository;
     private final UnreadCounterRepository unreadCounterRepository;
+    private final MuteSettingRepository muteSettingRepository;
     private final RestTemplate restTemplate = new RestTemplate();
 
     public NotificationService(NotificationRepository notificationRepository,
                                ReadStatusRepository readStatusRepository,
-                               UnreadCounterRepository unreadCounterRepository) {
+                               UnreadCounterRepository unreadCounterRepository,
+                               MuteSettingRepository muteSettingRepository) {
         this.notificationRepository = notificationRepository;
         this.readStatusRepository = readStatusRepository;
         this.unreadCounterRepository = unreadCounterRepository;
+        this.muteSettingRepository = muteSettingRepository;
     }
 
     /**
@@ -214,6 +220,27 @@ public class NotificationService {
             log.error("Failed to fetch server members for serverId={}", serverId, e);
         }
         return List.of();
+    }
+
+    @Transactional
+    public void toggleMute(String userId, MuteRequest req) {
+        MuteSetting setting = muteSettingRepository.findByUserIdAndTargetTypeAndTargetId(
+                userId, req.getTargetType(), req.getTargetId()
+        ).orElse(new MuteSetting(userId, req.getTargetType(), req.getTargetId(), req.isMuted()));
+        
+        setting.setMuted(req.isMuted());
+        muteSettingRepository.save(setting);
+    }
+
+    public List<MuteSetting> getMutedTargets(String userId) {
+        return muteSettingRepository.findAllByUserIdAndIsMutedTrue(userId);
+    }
+
+    public boolean isMuted(String userId, String targetType, String targetId) {
+        if (targetId == null) return false;
+        return muteSettingRepository.findByUserIdAndTargetTypeAndTargetId(userId, targetType, targetId)
+                .map(MuteSetting::isMuted)
+                .orElse(false);
     }
 
     /** Convert Entity → DTO */

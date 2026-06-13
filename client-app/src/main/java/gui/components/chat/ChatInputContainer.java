@@ -21,6 +21,9 @@ public class ChatInputContainer extends JPanel {
     private final JTextArea inputArea;
     private final JScrollPane inputScroll;
     private final JButton sendButton;
+    private final IconButton plusButton;
+    private final IconButton emojiButton;
+    private final IconButton giftBtn;
     private final JProgressBar uploadBar;
     
     // --- Reply panel ---
@@ -32,6 +35,8 @@ public class ChatInputContainer extends JPanel {
     private Runnable onSend = () -> {};
     private final JPopupMenu mentionPopup = new JPopupMenu();
     private java.util.List<String> availableMentions = new java.util.ArrayList<>();
+    private final JLabel blockedWarningLabel;
+    private final JPanel centerWrap;
 
     // Hàm để ChatClientGUI truyền dữ liệu thật vào
     public void setAvailableMentions(java.util.List<String> mentions) {
@@ -62,7 +67,7 @@ public class ChatInputContainer extends JPanel {
         putClientProperty("JComponent.arc", 12);
 
         // --- 1. Left icon (Plus/Attach) ---
-        IconButton plusButton = new IconButton("+", e -> onAttach.run());
+        plusButton = new IconButton("+", e -> onAttach.run());
         plusButton.setToolTipText("Đính kèm tệp");
         JPanel leftWrap = new JPanel(new GridBagLayout());
         leftWrap.setOpaque(false);
@@ -113,10 +118,10 @@ public class ChatInputContainer extends JPanel {
         rightPanel.setOpaque(false);
 
         // Nút quà/sticker — dùng AppIcons.plus thay emoji 🎁 (tránh ô vuông)
-        IconButton giftBtn = new IconButton(AppIcons.gift(16), e -> System.out.println("Gift menu..."));
+        giftBtn = new IconButton(AppIcons.gift(16), e -> System.out.println("Gift menu..."));
         giftBtn.setToolTipText("Sticker / Gift");
         rightPanel.add(giftBtn);
-        IconButton emojiButton = new IconButton(AppIcons.smile(16), e -> {
+        emojiButton = new IconButton(AppIcons.smile(16), e -> {
             JPopupMenu emojiMenu = new JPopupMenu();
             emojiMenu.setLayout(new GridLayout(3, 5, 4, 4));
             emojiMenu.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
@@ -228,10 +233,21 @@ public class ChatInputContainer extends JPanel {
         topWrap.add(replyPreviewPanel, BorderLayout.CENTER);
         topWrap.add(uploadBar, BorderLayout.SOUTH);
 
+        // --- Blocked Warning Label ---
+        blockedWarningLabel = new JLabel("Bạn không thể gửi tin nhắn cho người dùng này (Đã chặn).", SwingConstants.CENTER);
+        blockedWarningLabel.setFont(AppFonts.BODY_BOLD);
+        blockedWarningLabel.setForeground(AppColors.DANGER);
+        blockedWarningLabel.setVisible(false);
+        
+        centerWrap = new JPanel(new CardLayout());
+        centerWrap.setOpaque(false);
+        centerWrap.add(inputScroll, "INPUT");
+        centerWrap.add(blockedWarningLabel, "BLOCKED");
+
         // --- Assemble ---
         add(topWrap, BorderLayout.NORTH);
         add(leftWrap, BorderLayout.WEST);
-        add(inputScroll, BorderLayout.CENTER);
+        add(centerWrap, BorderLayout.CENTER);
         add(rightWrap, BorderLayout.EAST);
 
         adjustInputHeight(); // đặt chiều cao 1 dòng ban đầu
@@ -247,6 +263,24 @@ public class ChatInputContainer extends JPanel {
         int h = Math.max(oneRow, Math.min(pref, maxH));
         inputScroll.setPreferredSize(new Dimension(0, h));
         revalidate();
+        repaint();
+    }
+
+    public void setBlocked(boolean blocked) {
+        plusButton.setVisible(!blocked);
+        emojiButton.setVisible(!blocked);
+        giftBtn.setVisible(!blocked);
+        sendButton.setVisible(!blocked);
+        
+        CardLayout cl = (CardLayout) centerWrap.getLayout();
+        if (blocked) {
+            inputArea.setText("");
+            cl.show(centerWrap, "BLOCKED");
+            this.setBackground(AppColors.BG_SECONDARY);
+        } else {
+            cl.show(centerWrap, "INPUT");
+            this.setBackground(AppColors.BG_TERTIARY);
+        }
         repaint();
     }
 

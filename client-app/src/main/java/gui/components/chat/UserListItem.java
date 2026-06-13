@@ -28,6 +28,20 @@ public class UserListItem extends JPanel {
     private boolean isHovered = false;
     private Runnable onContextMenu;
 
+    private boolean isMuted = false;
+    private boolean isBlocked = false;
+    private String baseDisplayName;
+
+    public void setMuted(boolean muted) { this.isMuted = muted; updateDisplayName(); }
+    public void setBlocked(boolean blocked) { this.isBlocked = blocked; updateDisplayName(); }
+
+    private void updateDisplayName() {
+        StringBuilder sb = new StringBuilder(baseDisplayName != null ? baseDisplayName : username);
+        if (isMuted) sb.append(" 🔕");
+        if (isBlocked) sb.append(" [Bị chặn]");
+        nameLabel.setText(sb.toString());
+    }
+
     public void setOnContextMenu(Runnable onContextMenu) {
         this.onContextMenu = onContextMenu;
     }
@@ -101,7 +115,9 @@ public class UserListItem extends JPanel {
 
         // --- ÁP DỤNG BIỆT DANH LOCAL BAN ĐẦU ---
         String localNickname = gui.utils.NicknameManager.getNickname(username);
-        nameLabel = new JLabel(localNickname != null ? localNickname : username);
+        baseDisplayName = localNickname != null ? localNickname : username;
+        nameLabel = new JLabel();
+        updateDisplayName();
         nameLabel.setForeground(isOnline ? AppColors.TEXT_HEADER : AppColors.TEXT_MUTED);
         nameLabel.setFont(AppFonts.BODY_BOLD);
         textPanel.add(nameLabel);
@@ -159,7 +175,8 @@ public class UserListItem extends JPanel {
         if (gui.utils.NicknameManager.getNickname(this.username) == null) {
             if (profile.get("displayName") != null
                     && !profile.get("displayName").toString().isBlank()) {
-                nameLabel.setText(profile.get("displayName").toString());
+                baseDisplayName = profile.get("displayName").toString();
+                updateDisplayName();
             }
         }
 

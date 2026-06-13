@@ -14,6 +14,16 @@ public class ChannelListItem extends JPanel {
     private Runnable onClick;          // left-click → chọn channel
     private Runnable onContextMenu;    // right-click → edit/delete
 
+    private boolean isMuted = false;
+    private String baseName;
+
+    public void setMuted(boolean muted) {
+        this.isMuted = muted;
+        if (baseName != null) {
+            nameLabel.setText(isMuted ? baseName + " 🔕" : baseName);
+        }
+    }
+
     public void setOnClick(Runnable onClick) { this.onClick = onClick; }
     public void setOnContextMenu(Runnable onContextMenu) { this.onContextMenu = onContextMenu; }
 
@@ -54,6 +64,7 @@ public class ChannelListItem extends JPanel {
         }
 
         // Channel Name
+        this.baseName = channelName;
         nameLabel = new JLabel(channelName);
         nameLabel.setFont(new Font("SansSerif", Font.PLAIN, 14));
         nameLabel.setForeground(AppColors.TEXT_MUTED);

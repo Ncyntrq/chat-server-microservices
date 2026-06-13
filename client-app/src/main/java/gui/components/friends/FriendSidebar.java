@@ -23,6 +23,9 @@ public class FriendSidebar extends JPanel {
     private Consumer<String> onFriendSelected;
     private java.util.function.Consumer<String> onFriendAction;
     private Runnable onUserChanged;
+    
+    private final List<String> blockedUsers = new java.util.ArrayList<>();
+    private final List<String> mutedUsers = new java.util.ArrayList<>();
 
     // Đảm bảo chỉ 1 dialog "Thêm bạn" mở tại 1 thời điểm.
     private AddFriendDialog addFriendDialog;
@@ -57,10 +60,14 @@ public class FriendSidebar extends JPanel {
         titleLabel.setBorder(BorderFactory.createEmptyBorder(0, 16, 0, 0));
         headerPanel.add(titleLabel, BorderLayout.CENTER);
 
+        IconButton blockedBtn = new IconButton(AppIcons.ban(14), e -> showBlockedDialog());
+        blockedBtn.setToolTipText("Danh sách chặn");
         IconButton addFriendBtn = new IconButton(AppIcons.plus(14), e -> showAddFriendDialog());
         addFriendBtn.setToolTipText("Thêm bạn bè");
+        
         JPanel addWrap = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
         addWrap.setOpaque(false);
+        addWrap.add(blockedBtn);
         addWrap.add(addFriendBtn);
         headerPanel.add(addWrap, BorderLayout.EAST);
 
@@ -107,6 +114,18 @@ public class FriendSidebar extends JPanel {
             protected Void doInBackground() {
                 friends = friendApi.getFriends();
                 pending = friendApi.getPendingRequests();
+                try {
+                    blockedUsers.clear();
+                    blockedUsers.addAll(friendApi.getBlockedUsers());
+                    
+                    mutedUsers.clear();
+                    List<java.util.Map<String, Object>> muted = new network.NotificationApiClient().getMutedTargets(sessionUsername);
+                    for (java.util.Map<String, Object> m : muted) {
+                        if ("USER".equals(m.get("targetType"))) {
+                            mutedUsers.add((String) m.get("targetId"));
+                        }
+                    }
+                } catch (Exception ignore) {}
                 return null;
             }
 
@@ -186,6 +205,8 @@ public class FriendSidebar extends JPanel {
             listPanel.add(Box.createVerticalGlue());
             listPanel.add(emptyPanel);
             listPanel.add(Box.createVerticalGlue());
+            
+            applyUnread();
             listPanel.revalidate();
             listPanel.repaint();
             return;
@@ -248,9 +269,15 @@ public class FriendSidebar extends JPanel {
         listPanel.add(Box.createVerticalStrut(4));
         for (String f : onlineFriends) {
             UserListItem item = new UserListItem(f, null, AppColors.STATUS_ONLINE, true);
+            item.setMuted(mutedUsers.contains(f));
+            item.setBlocked(blockedUsers.contains(f));
             item.addMouseListener(new java.awt.event.MouseAdapter() {
                 public void mouseClicked(java.awt.event.MouseEvent e) {
-                    if (onFriendSelected != null) onFriendSelected.accept(f);
+                    if (SwingUtilities.isRightMouseButton(e)) {
+                        showFriendMenu(item, f);
+                    } else if (onFriendSelected != null) {
+                        onFriendSelected.accept(f);
+                    }
                 }
             });
             friendItems.put(f, item);
@@ -265,9 +292,15 @@ public class FriendSidebar extends JPanel {
         listPanel.add(Box.createVerticalStrut(4));
         for (String f : offlineFriends) {
             UserListItem item = new UserListItem(f, null, AppColors.STATUS_OFFLINE, false);
+            item.setMuted(mutedUsers.contains(f));
+            item.setBlocked(blockedUsers.contains(f));
             item.addMouseListener(new java.awt.event.MouseAdapter() {
                 public void mouseClicked(java.awt.event.MouseEvent e) {
-                    if (onFriendSelected != null) onFriendSelected.accept(f);
+                    if (SwingUtilities.isRightMouseButton(e)) {
+                        showFriendMenu(item, f);
+                    } else if (onFriendSelected != null) {
+                        onFriendSelected.accept(f);
+                    }
                 }
             });
             friendItems.put(f, item);
@@ -278,6 +311,13 @@ public class FriendSidebar extends JPanel {
         applyUnread(); // re-apply badge unread đã cache lên item vừa rebuild
         listPanel.revalidate();
         listPanel.repaint();
+    }
+    
+    private void showBlockedDialog() {
+        Window owner = SwingUtilities.getWindowAncestor(this);
+        new BlockedUsersDialog(owner, blockedUsers, () -> {
+            loadFriendsAndRequests(List.of()); // Refresh
+        }).setVisible(true);
     }
 
     /** Nút hành động nhỏ dạng ghost cho lời mời kết bạn. */
@@ -331,5 +371,51 @@ public class FriendSidebar extends JPanel {
         if (addFriendDialog != null) addFriendDialog.dispose(); // gỡ instance cũ đã ẩn
         addFriendDialog = new AddFriendDialog(owner, sessionUsername, onAction);
         addFriendDialog.setVisible(true);
+    }
+
+    private void showFriendMenu(Component anchor, String username) {
+        JPopupMenu menu = new JPopupMenu();
+        boolean isMuted = mutedUsers.contains(username);
+        boolean isBlocked = blockedUsers.contains(username);
+        
+        JMenuItem muteItem = new JMenuItem(isMuted ? "Unmute User" : "Mute User");
+        JMenuItem blockItem = new JMenuItem(isBlocked ? "Unblock User" : "Block User");
+
+        muteItem.addActionListener(e -> {
+            new SwingWorker<Void, Void>() {
+                @Override protected Void doInBackground() {
+                    new network.NotificationApiClient().toggleMute(sessionUsername, "USER", username, !isMuted);
+                    return null;
+                }
+                @Override protected void done() {
+                    loadFriendsAndRequests(List.of()); // Refresh
+                }
+            }.execute();
+        });
+
+        blockItem.addActionListener(e -> {
+            boolean confirm = gui.components.feedback.AppDialogs.showConfirm(this,
+                    "Xác nhận", "Bạn có muốn thay đổi trạng thái chặn với " + username + "?");
+            if (confirm) {
+                new SwingWorker<Void, Void>() {
+                    @Override protected Void doInBackground() {
+                        if (isBlocked) {
+                            friendApi.unblockUser(username);
+                        } else {
+                            friendApi.blockUser(username);
+                        }
+                        return null;
+                    }
+                    @Override protected void done() {
+                        loadFriendsAndRequests(List.of()); 
+                        if (onFriendAction != null) onFriendAction.accept(username);
+                    }
+                }.execute();
+            }
+        });
+
+        menu.add(muteItem);
+        menu.add(blockItem);
+        menu.show(anchor, anchor.getWidth() / 2, anchor.getHeight() / 2);
     }
 }

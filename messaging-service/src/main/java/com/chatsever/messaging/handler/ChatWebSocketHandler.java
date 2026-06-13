@@ -28,13 +28,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final RestTemplate restTemplate;
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
     private final String authUrl;
+    private final String friendUrl;
     private final ObjectMapper objectMapper;
-
 
     public ChatWebSocketHandler(MessageService messageService, RestTemplate restTemplate, @Value("${services.auth-url}") String authUrl) {
         this.messageService = messageService;
         this.restTemplate = restTemplate;
         this.authUrl = authUrl;
+        this.friendUrl = System.getenv("FRIEND_URL") != null ? System.getenv("FRIEND_URL") : "http://localhost:8088";
         this.objectMapper = new ObjectMapper();
         this.objectMapper.registerModule(new JavaTimeModule());
         this.objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
@@ -132,6 +133,26 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             case TYPING -> messageService.broadcastToChannel(msg);
             case STATUS -> {} // STATUS được publish từ presence-service qua RabbitMQ, không xử lý tại đây
             case PRIVATE -> {
+                // Check if blocked
+                boolean isBlocked = false;
+                try {
+                    String checkBlockUrl = friendUrl + "/api/friends/check-block?targetUsername=" + msg.getReceiver();
+                    org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+                    headers.set("X-User-Id", sender);
+                    org.springframework.http.HttpEntity<Void> entity = new org.springframework.http.HttpEntity<>(headers);
+                    org.springframework.http.ResponseEntity<Map> response = restTemplate.exchange(checkBlockUrl, org.springframework.http.HttpMethod.GET, entity, Map.class);
+                    if (response.getBody() != null && Boolean.TRUE.equals(response.getBody().get("blocked"))) {
+                        isBlocked = true;
+                    }
+                } catch (Exception e) {
+                    // Ignore, assume not blocked
+                }
+
+                if (isBlocked) {
+                    messageService.sendError(session, "Không thể gửi tin nhắn vì bạn hoặc người này đã chặn nhau.");
+                    return;
+                }
+
                 ChatMessage saved = messageService.saveMessage(msg);
                 msg.setMessageId(saved.getId());
                 messageService.sendPrivate(msg, session, sessions);

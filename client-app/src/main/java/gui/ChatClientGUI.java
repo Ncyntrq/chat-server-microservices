@@ -350,6 +350,7 @@ public class ChatClientGUI extends JFrame {
     private void onChannelSelected(long channelId) {
         this.activeChannelId = channelId;
         chatInput.setVisible(true);
+        chatInput.setBlocked(false);
         String name = channelSidebar.getChannelName(channelId);
         setChannelHeader("# " + (name != null ? name : "kênh"));
         chatHistoryView.setPlaceholderText("No messages yet — start the conversation 👋");
@@ -439,6 +440,37 @@ public class ChatClientGUI extends JFrame {
         new SwingWorker<Void, Void>() {
             @Override protected Void doInBackground() { notificationApi.ackDm(username, sessionUsername); return null; }
             @Override protected void done() { unreadSync.refresh(); }
+        }.execute();
+
+        // Check if blocked
+        new SwingWorker<Boolean, Void>() {
+            @Override protected Boolean doInBackground() {
+                try {
+                    String url = network.ApiConfig.GATEWAY_HTTP + "/api/friends/check-block?targetUsername=" + username;
+                    String token = network.SessionManager.get().getAccessToken();
+                    if (token != null) {
+                        java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder()
+                                .uri(java.net.URI.create(url))
+                                .header("Authorization", "Bearer " + token)
+                                .GET()
+                                .build();
+                        java.net.http.HttpResponse<String> resp = network.HttpClientHolder.get().send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
+                        if (resp.statusCode() == 200) {
+                            java.util.Map<String, Object> map = network.JsonMapper.get().readValue(resp.body(), new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>>() {});
+                            return Boolean.TRUE.equals(map.get("blocked"));
+                        }
+                    }
+                } catch (Exception e) {
+                    // Ignore
+                }
+                return false;
+            }
+            @Override protected void done() {
+                try {
+                    boolean blocked = get();
+                    chatInput.setBlocked(blocked);
+                } catch (Exception e) {}
+            }
         }.execute();
 
         new SwingWorker<List<MessageDTO>, Void>() {
@@ -543,10 +575,9 @@ public class ChatClientGUI extends JFrame {
 
     /** Xác nhận + thực thi Kick 1 thành viên (context menu RightSidebarView). */
     private void confirmKick(String username) {
-        int confirm = JOptionPane.showConfirmDialog(this,
-                "Are you sure you want to kick " + username + "?",
-                "Confirm Kick", JOptionPane.YES_NO_OPTION);
-        if (confirm != JOptionPane.YES_OPTION) return;
+        boolean confirm = gui.components.feedback.AppDialogs.showConfirm(this,
+                "Confirm Kick", "Are you sure you want to kick " + username + "?");
+        if (!confirm) return;
         new SwingWorker<Void, Void>() {
             @Override protected Void doInBackground() {
                 new network.RoleApiClient().kickMember(activeServerId, username);
@@ -554,7 +585,7 @@ public class ChatClientGUI extends JFrame {
             }
             @Override protected void done() {
                 try { get(); loadServerMembersAndPresence(activeServerId); }
-                catch (Exception ex) { JOptionPane.showMessageDialog(ChatClientGUI.this, "Kick error: " + ex.getMessage()); }
+                catch (Exception ex) { gui.components.feedback.AppDialogs.showError(ChatClientGUI.this, "Kick error: " + ex.getMessage()); }
             }
         }.execute();
     }

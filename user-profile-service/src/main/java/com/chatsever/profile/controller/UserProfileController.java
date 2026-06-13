@@ -19,7 +19,22 @@ public class UserProfileController {
 
     // UP1 — Xem hồ sơ
     @GetMapping("/{username}/profile")
-    public ResponseEntity<UserProfile> getProfile(@PathVariable String username) {
+    public ResponseEntity<?> getProfile(@PathVariable String username, @RequestHeader(value = "X-User-Id", required = false) String requesterId) {
+        if (requesterId != null && !requesterId.equals(username)) {
+            try {
+                String friendUrl = System.getenv("FRIEND_URL") != null ? System.getenv("FRIEND_URL") : "http://localhost:8088";
+                org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+                org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+                headers.set("X-User-Id", requesterId);
+                org.springframework.http.HttpEntity<Void> entity = new org.springframework.http.HttpEntity<>(headers);
+                ResponseEntity<Map> response = restTemplate.exchange(friendUrl + "/api/friends/check-block?targetUsername=" + username, org.springframework.http.HttpMethod.GET, entity, Map.class);
+                if (response.getBody() != null && Boolean.TRUE.equals(response.getBody().get("blocked"))) {
+                    return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).body(Map.of("message", "Hồ sơ không khả dụng."));
+                }
+            } catch (Exception e) {
+                // Ignore
+            }
+        }
         return ResponseEntity.ok(profileService.getProfile(username));
     }
 

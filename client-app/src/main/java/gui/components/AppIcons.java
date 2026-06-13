@@ -34,6 +34,7 @@ public final class AppIcons {
     public static Icon gift(int size)       { return new GiftIcon(size); }
     public static Icon smile(int size)      { return new SmileIcon(size); }
     public static Icon edit(int size)       { return new EditIcon(size); } // Đã thêm icon Edit (Cây bút)
+    public static Icon ban(int size)        { return new BanIcon(size); }
 
     /** Cây bút (Edit) — Vẽ tay 100% bằng Java2D, góc nghiêng 45 độ */
     public static class EditIcon implements Icon {
@@ -77,6 +78,37 @@ public final class AppIcons {
 
             // Nét gạch nhỏ tạo ngòi bút chì
             g2.draw(new Line2D.Float(0, hl - tipL * 0.4f, 0, hl));
+
+            g2.dispose();
+        }
+
+        @Override public int getIconWidth()  { return size; }
+        @Override public int getIconHeight() { return size; }
+    }
+
+    /** Chặn (🚫) — Vòng tròn gạch chéo chéo, vẽ Java2D. */
+    public static class BanIcon implements Icon {
+        private final int size;
+        BanIcon(int size) { this.size = size; }
+
+        @Override
+        public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D g2 = prep(g);
+            Color col = c != null ? c.getForeground() : AppColors.TEXT_MUTED;
+            float sw = Math.max(1.5f, size * 0.12f);
+            g2.setColor(col);
+            g2.setStroke(new BasicStroke(sw, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+
+            float cx = x + size / 2f;
+            float cy = y + size / 2f;
+            float r = size * 0.40f;
+
+            // Vòng tròn
+            g2.draw(new Ellipse2D.Float(cx - r, cy - r, r * 2, r * 2));
+            
+            // Đường gạch chéo
+            float offset = (float) (r * Math.cos(Math.PI / 4));
+            g2.draw(new Line2D.Float(cx - offset, cy - offset, cx + offset, cy + offset));
 
             g2.dispose();
         }

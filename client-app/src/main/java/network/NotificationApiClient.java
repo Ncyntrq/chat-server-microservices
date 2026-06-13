@@ -61,4 +61,47 @@ public class NotificationApiClient {
             }
         }
     }
+
+    public void toggleMute(String userId, String targetType, String targetId, boolean isMuted) {
+        try {
+            Map<String, Object> body = Map.of(
+                    "targetType", targetType,
+                    "targetId", targetId,
+                    "muted", isMuted
+            );
+            String payload = JsonMapper.get().writeValueAsString(body);
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(ApiConfig.GATEWAY_HTTP + "/api/notifications/mute?userId=" + userId))
+                    .POST(HttpRequest.BodyPublishers.ofString(payload))
+                    .header("Authorization", "Bearer " + SessionManager.get().getAccessToken())
+                    .header("Content-Type", "application/json")
+                    .build();
+            HttpClientHolder.get().send(request, HttpResponse.BodyHandlers.discarding());
+        } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            e.printStackTrace();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public java.util.List<Map<String, Object>> getMutedTargets(String userId) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(ApiConfig.GATEWAY_HTTP + "/api/notifications/mute?userId=" + userId))
+                    .GET()
+                    .header("Authorization", "Bearer " + SessionManager.get().getAccessToken())
+                    .build();
+            HttpResponse<String> response = HttpClientHolder.get().send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                return JsonMapper.get().readValue(response.body(), java.util.List.class);
+            }
+        } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        return java.util.Collections.emptyList();
+    }
 }

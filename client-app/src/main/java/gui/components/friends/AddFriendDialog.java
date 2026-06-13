@@ -29,6 +29,7 @@ public class AddFriendDialog extends JDialog {
 
     private Set<String> friends = Set.of();
     private Set<String> incomingPending = Set.of();
+    private final java.util.Set<String> sentRequests = new java.util.HashSet<>();
 
     public AddFriendDialog(JFrame owner, String sessionUsername, Consumer<String> onFriendAction) {
         super(owner, "Thêm bạn", false);
@@ -142,12 +143,15 @@ public class AddFriendDialog extends JDialog {
     private JButton buildActionButton(String username) {
         if (friends.contains(username)) return actionButton("Bạn bè", AppColors.STATUS_OFFLINE, null);
         if (incomingPending.contains(username)) {
-            return actionButton("Chấp nhận", AppColors.SUCCESS, () -> doAction(username, true));
+            return actionButton("Chấp nhận", AppColors.SUCCESS, b -> doAction(username, true, b));
         }
-        return actionButton("Kết bạn", AppColors.BRAND_PRIMARY, () -> doAction(username, false));
+        if (sentRequests.contains(username)) return actionButton("Đã gửi", AppColors.STATUS_OFFLINE, null);
+        return actionButton("Kết bạn", AppColors.BRAND_PRIMARY, b -> doAction(username, false, b));
     }
 
-    private void doAction(String username, boolean accept) {
+    private void doAction(String username, boolean accept, JButton sourceButton) {
+        sourceButton.setEnabled(false);
+        sourceButton.setText("...");
         new SwingWorker<Void, Void>() {
             Exception error;
             @Override protected Void doInBackground() {
@@ -157,17 +161,26 @@ public class AddFriendDialog extends JDialog {
             }
             @Override protected void done() {
                 if (error != null) {
-                    JOptionPane.showMessageDialog(AddFriendDialog.this, "Lỗi: " + error.getMessage());
+                    sourceButton.setEnabled(true);
+                    sourceButton.setText(accept ? "Chấp nhận" : "Kết bạn");
+                    gui.components.feedback.AppDialogs.showError(AddFriendDialog.this, "Lỗi", error.getMessage());
                     return;
                 }
                 if (onFriendAction != null) onFriendAction.accept(username);
+                if (!accept) {
+                    sentRequests.add(username);
+                    sourceButton.setText("Đã gửi");
+                    sourceButton.setBackground(AppColors.STATUS_OFFLINE);
+                } else {
+                    sourceButton.setText("Bạn bè");
+                    sourceButton.setBackground(AppColors.STATUS_OFFLINE);
+                }
                 loadRelationships();
-                runSearch(); // refresh trạng thái nút
             }
         }.execute();
     }
 
-    private JButton actionButton(String text, Color bg, Runnable onClick) {
+    private JButton actionButton(String text, Color bg, Consumer<JButton> onClick) {
         JButton b = new JButton(text);
         b.setForeground(Color.WHITE);
         b.setBackground(bg);
@@ -178,7 +191,7 @@ public class AddFriendDialog extends JDialog {
         b.setBorder(BorderFactory.createEmptyBorder(5, 12, 5, 12));
         if (onClick != null) {
             b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            b.addActionListener(e -> onClick.run());
+            b.addActionListener(e -> onClick.accept(b));
         } else {
             b.setEnabled(false);
         }

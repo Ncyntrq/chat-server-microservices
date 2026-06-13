@@ -74,4 +74,15 @@ public class NotificationController {
         notificationService.ackDmUnread(userId, senderUsername);
         return ResponseEntity.ok().build();
     }
+
+    @PostMapping("/notifications/mute")
+    public ResponseEntity<Void> toggleMute(@RequestParam String userId, @RequestBody com.chatsever.notification.dto.MuteRequest request) {
+        notificationService.toggleMute(userId, request);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/notifications/mute")
+    public ResponseEntity<List<com.chatsever.notification.model.MuteSetting>> getMutedTargets(@RequestParam String userId) {
+        return ResponseEntity.ok(notificationService.getMutedTargets(userId));
+    }
 }

@@ -39,6 +39,21 @@ public class FriendApiClient {
         postJson("/api/friends/reject", Map.of("targetUsername", targetUsername));
     }
 
+    // Chặn
+    public void blockUser(String targetUsername) {
+        postJson("/api/friends/block", Map.of("targetUsername", targetUsername));
+    }
+
+    // Bỏ chặn
+    public void unblockUser(String targetUsername) {
+        postJson("/api/friends/unblock", Map.of("targetUsername", targetUsername));
+    }
+
+    // Lấy danh sách chặn
+    public List<String> getBlockedUsers() {
+        return getList("/api/friends/blocked");
+    }
+
     @SuppressWarnings("unchecked")
     private List<String> getList(String path) {
         String url = ApiConfig.GATEWAY_HTTP + path;
@@ -53,7 +68,7 @@ public class FriendApiClient {
                     .build();
             HttpResponse<String> resp = HttpClientHolder.get().send(req, HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() / 100 != 2) {
-                throw new ApiException("Lỗi lấy dữ liệu bạn bè: " + resp.body());
+                throw new ApiException(parseErrorMessage(resp.body()));
             }
             return json.readValue(resp.body(), new TypeReference<List<String>>() {});
         } catch (ApiException e) {
@@ -78,12 +93,22 @@ public class FriendApiClient {
                     .build();
             HttpResponse<String> resp = HttpClientHolder.get().send(req, HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() / 100 != 2) {
-                throw new ApiException("Lỗi: " + resp.body());
+                throw new ApiException(parseErrorMessage(resp.body()));
             }
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
             throw new ApiException("Lỗi gọi " + url + ": " + e.getMessage(), e);
         }
+    }
+    
+    private String parseErrorMessage(String rawBody) {
+        try {
+            Map<String, Object> map = json.readValue(rawBody, new TypeReference<Map<String, Object>>() {});
+            if (map.containsKey("message")) {
+                return String.valueOf(map.get("message"));
+            }
+        } catch (Exception ignore) {}
+        return rawBody;
     }
 }

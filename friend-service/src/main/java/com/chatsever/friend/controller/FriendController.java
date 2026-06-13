@@ -66,8 +66,11 @@ public class FriendController {
 
         Optional<Friendship> existing = repository.findFriendship(userId, targetUser);
         if (existing.isPresent()) {
-            if (existing.get().getStatus() == FriendshipStatus.ACCEPTED) {
+            FriendshipStatus status = existing.get().getStatus();
+            if (status == FriendshipStatus.ACCEPTED) {
                 return ResponseEntity.badRequest().body(Map.of("message", "Đã có bạn bè trong danh sách."));
+            } else if (status == FriendshipStatus.BLOCKED) {
+                return ResponseEntity.badRequest().body(Map.of("message", "Không thể gửi lời mời kết bạn (Người dùng đã bị chặn)."));
             }
             return ResponseEntity.badRequest().body(Map.of("message", "Đã gửi lời mời hoặc đang chờ xác nhận."));
         }
@@ -114,5 +117,52 @@ public class FriendController {
             return ResponseEntity.ok(Map.of("message", "Friendship or request removed"));
         }
         return ResponseEntity.ok(Map.of("message", "Nothing to remove"));
+    }
+
+    // 6. Block user
+    @PostMapping("/block")
+    public ResponseEntity<?> blockUser(@RequestHeader("X-User-Id") String userId, @RequestBody Map<String, String> body) {
+        String targetUser = body.get("targetUsername");
+        if (targetUser == null || targetUser.equals(userId)) return ResponseEntity.badRequest().body(Map.of("message", "Invalid targetUsername"));
+
+        Optional<Friendship> existing = repository.findFriendship(userId, targetUser);
+        Friendship friendship = existing.orElse(new Friendship());
+        friendship.setRequester(userId); // The one who blocks is the requester
+        friendship.setAddressee(targetUser);
+        friendship.setStatus(FriendshipStatus.BLOCKED);
+        repository.save(friendship);
+        
+        return ResponseEntity.ok(Map.of("message", "Đã chặn người dùng " + targetUser));
+    }
+
+    // 7. Unblock user
+    @PostMapping("/unblock")
+    public ResponseEntity<?> unblockUser(@RequestHeader("X-User-Id") String userId, @RequestBody Map<String, String> body) {
+        String targetUser = body.get("targetUsername");
+        Optional<Friendship> existing = repository.findFriendship(userId, targetUser);
+        if (existing.isPresent() && existing.get().getStatus() == FriendshipStatus.BLOCKED && existing.get().getRequester().equals(userId)) {
+            repository.delete(existing.get());
+            return ResponseEntity.ok(Map.of("message", "Đã bỏ chặn người dùng " + targetUser));
+        }
+        return ResponseEntity.ok(Map.of("message", "Không thể bỏ chặn"));
+    }
+
+    // 8. Get blocked users
+    @GetMapping("/blocked")
+    public ResponseEntity<List<String>> getBlockedUsers(@RequestHeader("X-User-Id") String userId) {
+        List<Friendship> blocked = repository.findAllByUserAndStatus(userId, FriendshipStatus.BLOCKED);
+        List<String> blockedUsers = blocked.stream()
+                .filter(f -> f.getRequester().equals(userId)) // Only users blocked by me
+                .map(Friendship::getAddressee)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(blockedUsers);
+    }
+
+    // 9. Check if either user blocked the other
+    @GetMapping("/check-block")
+    public ResponseEntity<Map<String, Boolean>> checkBlock(@RequestHeader("X-User-Id") String userId, @RequestParam String targetUsername) {
+        Optional<Friendship> existing = repository.findFriendship(userId, targetUsername);
+        boolean blocked = existing.isPresent() && existing.get().getStatus() == FriendshipStatus.BLOCKED;
+        return ResponseEntity.ok(Map.of("blocked", blocked));
     }
 }

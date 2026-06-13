@@ -24,11 +24,15 @@ public class ChannelSidebar extends JPanel {
     // Cache unread cuối cùng — re-apply sau mỗi lần rebuild để badge không mất khi điều hướng
     private final Map<Long, Integer> lastUnread = new java.util.HashMap<>();
     private UserFooterPanel accountFooter;
+    private final String sessionUsername;
 
     private long activeServerId = -1;
     private LongConsumer onChannelSelected;
     private Runnable onChannelChanged;
     private Runnable onUserChanged;
+    
+    private boolean isServerMuted = false;
+    private final java.util.List<Long> mutedChannels = new java.util.ArrayList<>();
 
     public void setOnChannelSelected(LongConsumer onChannelSelected) {
         this.onChannelSelected = onChannelSelected;
@@ -49,6 +53,7 @@ public class ChannelSidebar extends JPanel {
     }
 
     public ChannelSidebar(String sessionUsername) {
+        this.sessionUsername = sessionUsername;
         setLayout(new BorderLayout());
         setBackground(AppColors.BG_SECONDARY);
         setPreferredSize(new Dimension(240, 0));
@@ -121,7 +126,22 @@ public class ChannelSidebar extends JPanel {
         new SwingWorker<List<Map<String, Object>>, Void>() {
             @Override
             protected List<Map<String, Object>> doInBackground() {
-                return channelApi.getChannelsByServer(serverId);
+                List<Map<String, Object>> channels = channelApi.getChannelsByServer(serverId);
+                try {
+                    List<Map<String, Object>> muted = new network.NotificationApiClient().getMutedTargets(sessionUsername);
+                    isServerMuted = false;
+                    mutedChannels.clear();
+                    for (Map<String, Object> m : muted) {
+                        String type = (String) m.get("targetType");
+                        String idStr = (String) m.get("targetId");
+                        if ("SERVER".equals(type) && String.valueOf(serverId).equals(idStr)) {
+                            isServerMuted = true;
+                        } else if ("CHANNEL".equals(type)) {
+                            mutedChannels.add(Long.parseLong(idStr));
+                        }
+                    }
+                } catch (Exception ignore) {}
+                return channels;
             }
 
             @Override
@@ -143,6 +163,9 @@ public class ChannelSidebar extends JPanel {
     private void renderChannels(List<Map<String, Object>> channels) {
         listPanel.removeAll();
         channelItems.clear();
+        
+        String cleanTitle = titleLabel.getText().replace(" 🔕 ⏷", "").replace(" ⏷", "");
+        titleLabel.setText(cleanTitle + (isServerMuted ? " 🔕 ⏷" : " ⏷"));
 
         boolean addedTextHeader = false;
         boolean addedVoiceHeader = false;
@@ -221,6 +244,7 @@ public class ChannelSidebar extends JPanel {
         String topic = str(ch.get("topic"));
         if (name != null) channelNames.put(id, name);
         ChannelListItem item = new ChannelListItem(name != null ? name : "channel", isVoice);
+        item.setMuted(mutedChannels.contains(id));
         item.setOnClick(() -> {
             if (onChannelSelected != null) onChannelSelected.accept(id);
         });
@@ -259,8 +283,20 @@ public class ChannelSidebar extends JPanel {
                         Window owner = SwingUtilities.getWindowAncestor(ChannelSidebar.this);
                         new gui.server.InviteCodeDialog(owner, code).setVisible(true);
                     } catch (Exception ex) {
-                        JOptionPane.showMessageDialog(ChannelSidebar.this, "Error generating invite: " + ex.getMessage());
+                        gui.components.feedback.AppDialogs.showError(ChannelSidebar.this, "Lỗi", "Error generating invite: " + ex.getMessage());
                     }
+                }
+            }.execute();
+        }));
+
+        menu.add(new gui.components.dropdown.AppDropdownItem(isServerMuted ? "Unmute Server" : "Mute Server", e -> {
+            new SwingWorker<Void, Void>() {
+                @Override protected Void doInBackground() {
+                    new network.NotificationApiClient().toggleMute(sessionUsername, "SERVER", String.valueOf(activeServerId), !isServerMuted);
+                    return null;
+                }
+                @Override protected void done() {
+                    loadChannels(activeServerId, titleLabel.getText().replace(" 🔕 ⏷", "").replace(" ⏷", ""));
                 }
             }.execute();
         }));
@@ -268,9 +304,9 @@ public class ChannelSidebar extends JPanel {
         menu.addSeparator();
 
         menu.add(new gui.components.dropdown.AppDropdownItem("Leave Server", AppColors.DANGER, AppColors.DANGER, e -> {
-            int confirm = JOptionPane.showConfirmDialog(this,
-                    "Are you sure you want to leave this server?", "Confirm", JOptionPane.YES_NO_OPTION);
-            if (confirm != JOptionPane.YES_OPTION) return;
+            boolean confirm = gui.components.feedback.AppDialogs.showConfirm(this,
+                    "Confirm", "Are you sure you want to leave this server?");
+            if (!confirm) return;
             new SwingWorker<Void, Void>() {
                 @Override protected Void doInBackground() {
                     new network.ServerApiClient().leaveServer(activeServerId);
@@ -281,7 +317,7 @@ public class ChannelSidebar extends JPanel {
                         get();
                         if (onChannelChanged != null) onChannelChanged.run();
                     } catch (Exception ex) {
-                        JOptionPane.showMessageDialog(ChannelSidebar.this, "Error leaving server: " + ex.getMessage());
+                        gui.components.feedback.AppDialogs.showError(ChannelSidebar.this, "Error leaving server: " + ex.getMessage());
                     }
                 }
             }.execute();
@@ -296,17 +332,32 @@ public class ChannelSidebar extends JPanel {
         JMenuItem deleteItem = new JMenuItem("Delete Channel");
         Window owner = SwingUtilities.getWindowAncestor(this);
 
+        boolean isChannelMuted = mutedChannels.contains(channelId);
+        JMenuItem muteItem = new JMenuItem(isChannelMuted ? "Unmute Channel" : "Mute Channel");
+        
         editItem.addActionListener(e ->
                 new EditChannelDialog(owner, channelId, name, topic,
                         () -> {
-                            loadChannels(activeServerId, titleLabel.getText());
+                            loadChannels(activeServerId, titleLabel.getText().replace(" 🔕 ⏷", "").replace(" ⏷", ""));
                             if (onChannelChanged != null) onChannelChanged.run();
                         }).setVisible(true));
 
+        muteItem.addActionListener(e -> {
+            new SwingWorker<Void, Void>() {
+                @Override protected Void doInBackground() {
+                    new network.NotificationApiClient().toggleMute(sessionUsername, "CHANNEL", String.valueOf(channelId), !isChannelMuted);
+                    return null;
+                }
+                @Override protected void done() {
+                    loadChannels(activeServerId, titleLabel.getText().replace(" 🔕 ⏷", "").replace(" ⏷", ""));
+                }
+            }.execute();
+        });
+
         deleteItem.addActionListener(e -> {
-            int confirm = JOptionPane.showConfirmDialog(this,
-                    "Delete channel \"" + name + "\"?", "Confirm", JOptionPane.YES_NO_OPTION);
-            if (confirm != JOptionPane.YES_OPTION) return;
+            boolean confirm = gui.components.feedback.AppDialogs.showConfirm(this,
+                    "Confirm", "Delete channel \"" + name + "\"?");
+            if (!confirm) return;
             new SwingWorker<Void, Void>() {
                 @Override
                 protected Void doInBackground() {
@@ -321,7 +372,7 @@ public class ChannelSidebar extends JPanel {
                         loadChannels(activeServerId, titleLabel.getText());
                         if (onChannelChanged != null) onChannelChanged.run();
                     } catch (Exception ex) {
-                        JOptionPane.showMessageDialog(ChannelSidebar.this,
+                        gui.components.feedback.AppDialogs.showError(ChannelSidebar.this,
                                 "Error deleting channel: " + ex.getMessage());
                     }
                 }
@@ -329,6 +380,7 @@ public class ChannelSidebar extends JPanel {
         });
 
         menu.add(editItem);
+        menu.add(muteItem);
         menu.add(deleteItem);
         menu.show(anchor, 0, anchor.getHeight());
     }
