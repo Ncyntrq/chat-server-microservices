@@ -188,7 +188,7 @@ public class UserSettingsDialog extends JDialog {
                             if (owner != null) {
                                 owner.dispose();
                             }
-                            new gui.landing.LandingFrame().setVisible(true);
+                            new gui.auth.AuthFrame().setVisible(true);
                             dispose();
                         }
                     }.execute();
