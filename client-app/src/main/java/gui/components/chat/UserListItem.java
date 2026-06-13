@@ -46,6 +46,11 @@ public class UserListItem extends JPanel {
         this.onContextMenu = onContextMenu;
     }
 
+    private Runnable onClick;
+    public void setOnClick(Runnable onClick) {
+        this.onClick = onClick;
+    }
+
     private int unreadCount = 0;
     private gui.components.chat.UnreadBadgePanel badgePanel;
 
@@ -89,12 +94,16 @@ public class UserListItem extends JPanel {
                 if (SwingUtilities.isRightMouseButton(e) && onContextMenu != null) {
                     onContextMenu.run();
                 } else if (SwingUtilities.isLeftMouseButton(e)) {
-                    // Mở profile khi click chuột trái
-                    if (username == null || username.equals("SYSTEM") || username.equalsIgnoreCase("admin")) return;
+                    if (onClick != null) {
+                        onClick.run();
+                    } else {
+                        // Mở profile khi click chuột trái mặc định
+                        if (username == null || username.equals("SYSTEM") || username.equalsIgnoreCase("admin")) return;
 
-                    Window owner = SwingUtilities.getWindowAncestor(UserListItem.this);
-                    if (owner instanceof Frame) {
-                        new UserProfileDialog((Frame) owner, username).setVisible(true);
+                        Window owner = SwingUtilities.getWindowAncestor(UserListItem.this);
+                        if (owner instanceof Frame) {
+                            new UserProfileDialog((Frame) owner, username).setVisible(true);
+                        }
                     }
                 }
             }

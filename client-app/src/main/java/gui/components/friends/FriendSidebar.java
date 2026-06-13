@@ -271,13 +271,10 @@ public class FriendSidebar extends JPanel {
             UserListItem item = new UserListItem(f, null, AppColors.STATUS_ONLINE, true);
             item.setMuted(mutedUsers.contains(f));
             item.setBlocked(blockedUsers.contains(f));
-            item.addMouseListener(new java.awt.event.MouseAdapter() {
-                public void mouseClicked(java.awt.event.MouseEvent e) {
-                    if (SwingUtilities.isRightMouseButton(e)) {
-                        showFriendMenu(item, f);
-                    } else if (onFriendSelected != null) {
-                        onFriendSelected.accept(f);
-                    }
+            item.setOnContextMenu(() -> showFriendMenu(item, f));
+            item.setOnClick(() -> {
+                if (onFriendSelected != null) {
+                    onFriendSelected.accept(f);
                 }
             });
             friendItems.put(f, item);
@@ -294,13 +291,10 @@ public class FriendSidebar extends JPanel {
             UserListItem item = new UserListItem(f, null, AppColors.STATUS_OFFLINE, false);
             item.setMuted(mutedUsers.contains(f));
             item.setBlocked(blockedUsers.contains(f));
-            item.addMouseListener(new java.awt.event.MouseAdapter() {
-                public void mouseClicked(java.awt.event.MouseEvent e) {
-                    if (SwingUtilities.isRightMouseButton(e)) {
-                        showFriendMenu(item, f);
-                    } else if (onFriendSelected != null) {
-                        onFriendSelected.accept(f);
-                    }
+            item.setOnContextMenu(() -> showFriendMenu(item, f));
+            item.setOnClick(() -> {
+                if (onFriendSelected != null) {
+                    onFriendSelected.accept(f);
                 }
             });
             friendItems.put(f, item);
@@ -374,14 +368,22 @@ public class FriendSidebar extends JPanel {
     }
 
     private void showFriendMenu(Component anchor, String username) {
-        JPopupMenu menu = new JPopupMenu();
+        gui.components.dropdown.AppDropdown menu = new gui.components.dropdown.AppDropdown();
         boolean isMuted = mutedUsers.contains(username);
         boolean isBlocked = blockedUsers.contains(username);
-        
-        JMenuItem muteItem = new JMenuItem(isMuted ? "Unmute User" : "Mute User");
-        JMenuItem blockItem = new JMenuItem(isBlocked ? "Unblock User" : "Block User");
 
-        muteItem.addActionListener(e -> {
+        menu.add(new gui.components.dropdown.AppDropdownItem("Hồ sơ", e -> {
+            JFrame owner = (JFrame) SwingUtilities.getWindowAncestor(this);
+            new gui.profile.UserProfileDialog(owner, username).setVisible(true);
+        }));
+
+        menu.add(new gui.components.dropdown.AppDropdownItem("Nhắn tin", e -> {
+            if (onFriendSelected != null) onFriendSelected.accept(username);
+        }));
+
+        menu.addSeparator();
+
+        menu.add(new gui.components.dropdown.AppDropdownItem(isMuted ? "Unmute User" : "Mute User", e -> {
             new SwingWorker<Void, Void>() {
                 @Override protected Void doInBackground() {
                     new network.NotificationApiClient().toggleMute(sessionUsername, "USER", username, !isMuted);
@@ -391,10 +393,11 @@ public class FriendSidebar extends JPanel {
                     loadFriendsAndRequests(List.of()); // Refresh
                 }
             }.execute();
-        });
+        }));
 
-        blockItem.addActionListener(e -> {
-            boolean confirm = gui.components.feedback.AppDialogs.showConfirm(this,
+        gui.components.dropdown.AppDropdownItem blockItem = new gui.components.dropdown.AppDropdownItem(isBlocked ? "Unblock User" : "Block User", e -> {
+            JFrame owner = (JFrame) SwingUtilities.getWindowAncestor(this);
+            boolean confirm = gui.components.feedback.AppDialogs.showConfirm(owner,
                     "Xác nhận", "Bạn có muốn thay đổi trạng thái chặn với " + username + "?");
             if (confirm) {
                 new SwingWorker<Void, Void>() {
@@ -413,9 +416,9 @@ public class FriendSidebar extends JPanel {
                 }.execute();
             }
         });
-
-        menu.add(muteItem);
+        blockItem.setForeground(AppColors.DANGER);
         menu.add(blockItem);
+
         menu.show(anchor, anchor.getWidth() / 2, anchor.getHeight() / 2);
     }
 }
