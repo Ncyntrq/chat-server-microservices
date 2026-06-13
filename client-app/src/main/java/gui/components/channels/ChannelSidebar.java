@@ -327,22 +327,18 @@ public class ChannelSidebar extends JPanel {
     }
 
     private void showChannelMenu(Component anchor, long channelId, String name, String topic) {
-        JPopupMenu menu = new JPopupMenu();
-        JMenuItem editItem = new JMenuItem("Edit Channel");
-        JMenuItem deleteItem = new JMenuItem("Delete Channel");
+        gui.components.dropdown.AppDropdown menu = new gui.components.dropdown.AppDropdown();
         Window owner = SwingUtilities.getWindowAncestor(this);
-
         boolean isChannelMuted = mutedChannels.contains(channelId);
-        JMenuItem muteItem = new JMenuItem(isChannelMuted ? "Unmute Channel" : "Mute Channel");
         
-        editItem.addActionListener(e ->
+        menu.add(new gui.components.dropdown.AppDropdownItem("Edit Channel", e ->
                 new EditChannelDialog(owner, channelId, name, topic,
                         () -> {
                             loadChannels(activeServerId, titleLabel.getText().replace(" 🔕 ⏷", "").replace(" ⏷", ""));
                             if (onChannelChanged != null) onChannelChanged.run();
-                        }).setVisible(true));
+                        }).setVisible(true)));
 
-        muteItem.addActionListener(e -> {
+        menu.add(new gui.components.dropdown.AppDropdownItem(isChannelMuted ? "Unmute Channel" : "Mute Channel", e -> {
             new SwingWorker<Void, Void>() {
                 @Override protected Void doInBackground() {
                     new network.NotificationApiClient().toggleMute(sessionUsername, "CHANNEL", String.valueOf(channelId), !isChannelMuted);
@@ -352,9 +348,11 @@ public class ChannelSidebar extends JPanel {
                     loadChannels(activeServerId, titleLabel.getText().replace(" 🔕 ⏷", "").replace(" ⏷", ""));
                 }
             }.execute();
-        });
+        }));
 
-        deleteItem.addActionListener(e -> {
+        menu.addSeparator();
+
+        menu.add(new gui.components.dropdown.AppDropdownItem("Delete Channel", AppColors.DANGER, AppColors.DANGER, e -> {
             boolean confirm = gui.components.feedback.AppDialogs.showConfirm(this,
                     "Confirm", "Delete channel \"" + name + "\"?");
             if (!confirm) return;
@@ -364,7 +362,6 @@ public class ChannelSidebar extends JPanel {
                     channelApi.deleteChannel(channelId);
                     return null;
                 }
-
                 @Override
                 protected void done() {
                     try {
@@ -377,12 +374,9 @@ public class ChannelSidebar extends JPanel {
                     }
                 }
             }.execute();
-        });
+        }));
 
-        menu.add(editItem);
-        menu.add(muteItem);
-        menu.add(deleteItem);
-        menu.show(anchor, 0, anchor.getHeight());
+        menu.show(anchor, anchor.getWidth(), 0);
     }
 
     private static long asLong(Object o) {

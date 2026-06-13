@@ -65,6 +65,9 @@ public class BlockedUsersDialog extends JDialog {
                 unblockBtn.setBorderPainted(false);
                 unblockBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
                 unblockBtn.addActionListener(e -> {
+                    boolean confirm = gui.components.feedback.AppDialogs.showConfirm(BlockedUsersDialog.this, 
+                        "Xác nhận", "Bạn có chắc muốn bỏ chặn " + f + "?");
+                    if (!confirm) return;
                     new SwingWorker<Void, Void>() {
                         @Override protected Void doInBackground() {
                             friendApi.unblockUser(f);
@@ -81,7 +84,11 @@ public class BlockedUsersDialog extends JDialog {
                 wrap.setOpaque(false);
                 wrap.setMaximumSize(new Dimension(Integer.MAX_VALUE, 56));
                 wrap.add(item, BorderLayout.CENTER);
-                wrap.add(unblockBtn, BorderLayout.EAST);
+                
+                JPanel btnWrap = new JPanel(new GridBagLayout());
+                btnWrap.setOpaque(false);
+                btnWrap.add(unblockBtn);
+                wrap.add(btnWrap, BorderLayout.EAST);
                 
                 listPanel.add(wrap);
                 listPanel.add(Box.createVerticalStrut(8));

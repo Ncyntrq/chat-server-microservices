@@ -98,6 +98,8 @@ public class ChatClientGUI extends JFrame {
         int h = Math.max(600, Math.min(750, (int) (screen.height * 0.8)));
         setSize(w, h);
         setMinimumSize(new Dimension(820, 560)); // chặn layout vỡ/che ô nhập khi thu nhỏ
+        
+        serverSidebar.setSessionUsername(sessionUsername);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());

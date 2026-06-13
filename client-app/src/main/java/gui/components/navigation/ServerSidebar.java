@@ -32,6 +32,11 @@ public class ServerSidebar extends JPanel {
     private BiConsumer<Long, String> onServerSelected;
     private java.util.function.Consumer<Long> onServerChanged;
     private long activeServerId = -1;
+    private String sessionUsername;
+
+    public void setSessionUsername(String sessionUsername) {
+        this.sessionUsername = sessionUsername;
+    }
 
     public void setOnServerSelected(BiConsumer<Long, String> onServerSelected) {
         this.onServerSelected = onServerSelected;
@@ -125,6 +130,7 @@ public class ServerSidebar extends JPanel {
                 if (onServerSelected != null) onServerSelected.accept(id, name);
                 refreshActiveStates();
             });
+            item.setOnContextMenu(() -> showServerContextMenu(item, id, name));
             listPanel.add(item);
         }
 
@@ -185,23 +191,114 @@ public class ServerSidebar extends JPanel {
     }
 
     private void showAddServerMenu(Component anchor) {
-        JPopupMenu menu = new JPopupMenu();
-        JMenuItem createItem = new JMenuItem("Create Server");
-        JMenuItem joinItem = new JMenuItem("Join Server");
+        gui.components.dropdown.AppDropdown menu = new gui.components.dropdown.AppDropdown();
         Window owner = SwingUtilities.getWindowAncestor(this);
-        createItem.addActionListener(e ->
+        
+        menu.add(new gui.components.dropdown.AppDropdownItem("Create Server", e ->
                 new CreateServerDialog(owner, () -> {
                     loadServers();
-                    // Tạo mới thì không có ai khác trong server, có thể broadcast với -1 hoặc bỏ qua
                     if (onServerChanged != null) onServerChanged.accept(-1L);
-                }).setVisible(true));
-        joinItem.addActionListener(e ->
+                }).setVisible(true)));
+                
+        menu.add(new gui.components.dropdown.AppDropdownItem("Join Server", e ->
                 new JoinServerDialog(owner, (joinedServerId) -> {
                     loadServers();
-                    if (onServerChanged != null && joinedServerId != -1) onServerChanged.accept(joinedServerId);
-                }).setVisible(true));
-        menu.add(createItem);
-        menu.add(joinItem);
+                    activeServerId = joinedServerId;
+                    if (onServerSelected != null) onServerSelected.accept(joinedServerId, getServerName(joinedServerId));
+                }).setVisible(true)));
+
+        menu.show(anchor, anchor.getWidth(), 0);
+    }
+
+    private void showServerContextMenu(Component anchor, long serverId, String serverName) {
+        new SwingWorker<Boolean, Void>() {
+            @Override protected Boolean doInBackground() {
+                try {
+                    List<Map<String, Object>> muted = new network.NotificationApiClient().getMutedTargets(sessionUsername);
+                    for (Map<String, Object> m : muted) {
+                        if ("SERVER".equals(m.get("targetType")) && String.valueOf(serverId).equals(m.get("targetId"))) {
+                            return true;
+                        }
+                    }
+                } catch (Exception ignore) {}
+                return false;
+            }
+            @Override protected void done() {
+                boolean isMuted = false;
+                try { isMuted = get(); } catch (Exception ignore) {}
+                showServerContextMenuWithMuteState(anchor, serverId, serverName, isMuted);
+            }
+        }.execute();
+    }
+
+    private void showServerContextMenuWithMuteState(Component anchor, long serverId, String serverName, boolean isMuted) {
+        gui.components.dropdown.AppDropdown menu = new gui.components.dropdown.AppDropdown();
+        
+        menu.add(new gui.components.dropdown.AppDropdownItem("Server Settings", e -> {
+            Window owner = SwingUtilities.getWindowAncestor(this);
+            new gui.server.UnifiedServerSettingsDialog(owner, serverId, () -> {
+                loadServers();
+                if (onServerChanged != null) onServerChanged.accept(serverId);
+            }).setVisible(true);
+        }));
+        
+        menu.add(new gui.components.dropdown.AppDropdownItem("Create Channel", e -> {
+            Window owner = SwingUtilities.getWindowAncestor(this);
+            new gui.channel.CreateChannelDialog(owner, serverId, () -> {
+                if (onServerChanged != null) onServerChanged.accept(serverId);
+            }).setVisible(true);
+        }));
+
+        menu.add(new gui.components.dropdown.AppDropdownItem("Invite People", e -> {
+            new SwingWorker<String, Void>() {
+                @Override protected String doInBackground() {
+                    return new network.ServerApiClient().createInviteCode(serverId);
+                }
+                @Override protected void done() {
+                    try {
+                        String code = get();
+                        Window owner = SwingUtilities.getWindowAncestor(ServerSidebar.this);
+                        new gui.server.InviteCodeDialog(owner, code).setVisible(true);
+                    } catch (Exception ex) {
+                        gui.components.feedback.AppDialogs.showError(ServerSidebar.this, "Lỗi", "Error generating invite: " + ex.getMessage());
+                    }
+                }
+            }.execute();
+        }));
+
+        menu.add(new gui.components.dropdown.AppDropdownItem(isMuted ? "Unmute Server" : "Mute Server", e -> {
+            new SwingWorker<Void, Void>() {
+                @Override protected Void doInBackground() {
+                    new network.NotificationApiClient().toggleMute(sessionUsername, "SERVER", String.valueOf(serverId), !isMuted);
+                    return null;
+                }
+                @Override protected void done() {
+                    if (onServerChanged != null) onServerChanged.accept(serverId);
+                }
+            }.execute();
+        }));
+
+        menu.addSeparator();
+
+        menu.add(new gui.components.dropdown.AppDropdownItem("Leave Server", AppColors.DANGER, AppColors.DANGER, e -> {
+            boolean confirm = gui.components.feedback.AppDialogs.showConfirm(this,
+                    "Confirm", "Are you sure you want to leave this server?");
+            if (!confirm) return;
+            new SwingWorker<Void, Void>() {
+                @Override protected Void doInBackground() {
+                    new network.ServerApiClient().leaveServer(serverId);
+                    return null;
+                }
+                @Override protected void done() {
+                    loadServers();
+                    if (activeServerId == serverId) {
+                        activeServerId = -1;
+                        if (onServerSelected != null) onServerSelected.accept(-1L, null);
+                    }
+                }
+            }.execute();
+        }));
+
         menu.show(anchor, anchor.getWidth(), 0);
     }
 
