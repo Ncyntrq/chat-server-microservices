@@ -388,7 +388,7 @@ public class  ChatMessageItem extends JPanel {
             timeLabel.setForeground(new Color(0x80, 0x84, 0x8E, 0x99));
             leftHeader.add(timeLabel);
 
-            headerRow.add(leftHeader, BorderLayout.WEST);
+            headerRow.add(leftHeader, isOwn ? BorderLayout.EAST : BorderLayout.WEST);
 
             boolean isDeleted = "Tin nhắn bị gỡ".equals(message.getContent());
             if (Boolean.TRUE.equals(message.getIsEdited()) && !isDeleted) {
@@ -456,8 +456,8 @@ public class  ChatMessageItem extends JPanel {
         reactionBadgePanel.setOpaque(false);
         reactionBadgePanel.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
         
-        // Tạo wrapper để canh lề trái cho reactionBadgePanel
-        reactionWrap = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        // Tạo wrapper để canh lề reactionBadgePanel: theo bong bóng (trái cho người khác, phải cho mình).
+        reactionWrap = new JPanel(new FlowLayout(isOwn ? FlowLayout.RIGHT : FlowLayout.LEFT, 0, 0));
         reactionWrap.setOpaque(false);
         reactionWrap.setBorder(BorderFactory.createEmptyBorder(2, 0, 0, 0));
         reactionWrap.add(reactionBadgePanel);
@@ -469,19 +469,24 @@ public class  ChatMessageItem extends JPanel {
         centerWrap = new JPanel(new GridBagLayout());
         centerWrap.setOpaque(false);
 
+        // Tin của mình → nội dung dồn về PHẢI (glue ở trái); người khác → dồn TRÁI (glue ở phải).
+        int contentGx = isOwn ? 1 : 0;
+        int glueGx = isOwn ? 0 : 2;
+        int contentAnchor = isOwn ? GridBagConstraints.EAST : GridBagConstraints.WEST;
+
         // Row 0: contentPanel (message body)
         GridBagConstraints cc = new GridBagConstraints();
-        cc.gridx = 0; cc.gridy = 0; cc.anchor = GridBagConstraints.WEST; cc.weighty = 1; cc.fill = GridBagConstraints.NONE;
+        cc.gridx = contentGx; cc.gridy = 0; cc.anchor = contentAnchor; cc.weighty = 1; cc.fill = GridBagConstraints.NONE;
         centerWrap.add(contentPanel, cc);
 
         // Row 1: reactionWrap — riêng biệt, KHÔNG nằm trong contentPanel
         // ⇒ không ảnh hưởng chiều rộng bubble
         GridBagConstraints rc = new GridBagConstraints();
-        rc.gridx = 0; rc.gridy = 1; rc.anchor = GridBagConstraints.WEST; rc.fill = GridBagConstraints.NONE;
+        rc.gridx = contentGx; rc.gridy = 1; rc.anchor = contentAnchor; rc.fill = GridBagConstraints.NONE;
         centerWrap.add(reactionWrap, rc);
 
         GridBagConstraints gl = new GridBagConstraints();
-        gl.gridx = 2; gl.gridy = 0; gl.gridheight = 2; gl.weightx = 1; gl.fill = GridBagConstraints.HORIZONTAL;
+        gl.gridx = glueGx; gl.gridy = 0; gl.gridheight = 2; gl.weightx = 1; gl.fill = GridBagConstraints.HORIZONTAL;
         centerWrap.add(Box.createHorizontalGlue(), gl);
 
         // Overlay: centerWrap là lớp nền (lấp đầy), toolbar nổi lên trên định vị tuyệt đối.
@@ -501,7 +506,7 @@ public class  ChatMessageItem extends JPanel {
         overlay.setOpaque(false);
         overlay.add(centerWrap);
 
-        add(west, BorderLayout.WEST);
+        add(west, isOwn ? BorderLayout.EAST : BorderLayout.WEST);
         add(overlay, BorderLayout.CENTER);
     }
 
@@ -515,13 +520,22 @@ public class  ChatMessageItem extends JPanel {
         Dimension ts = toolbar.getPreferredSize();
         int overlayW = overlay.getWidth();
         // contentPanel nằm trong centerWrap (đã lấp đầy overlay tại 0,0) ⇒ toạ độ trùng overlay.
-        int bubbleRight = centerWrap.getX() + contentPanel.getX() + contentPanel.getWidth();
+        int bubbleLeft = centerWrap.getX() + contentPanel.getX();
+        int bubbleRight = bubbleLeft + contentPanel.getWidth();
         int bubbleTop = centerWrap.getY() + contentPanel.getY();
 
         int gap = 8;
-        int x = (bubbleRight + gap + ts.width <= overlayW)
-                ? bubbleRight + gap                       // bên phải bong bóng (tin ngắn)
-                : Math.max(0, overlayW - ts.width);       // neo mép phải (tin dài)
+        int x;
+        if (isOwn) {
+            // Tin của mình (bong bóng bên phải) → toolbar nổi bên TRÁI bong bóng, neo mép trái nếu hết chỗ.
+            x = (bubbleLeft - gap - ts.width >= 0)
+                    ? bubbleLeft - gap - ts.width
+                    : 0;
+        } else {
+            x = (bubbleRight + gap + ts.width <= overlayW)
+                    ? bubbleRight + gap                   // bên phải bong bóng (tin ngắn)
+                    : Math.max(0, overlayW - ts.width);   // neo mép phải (tin dài)
+        }
 
         // Luôn căn giữa dọc toolbar theo bong bóng tin (mọi độ dài).
         int contentH = contentPanel.getHeight();
