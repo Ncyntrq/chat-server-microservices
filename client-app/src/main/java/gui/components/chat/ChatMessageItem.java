@@ -349,8 +349,11 @@ public class ChatMessageItem extends JPanel {
             headerRow.setOpaque(false);
             headerRow.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-            JPanel leftHeader = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+            JPanel leftHeader = new JPanel(new FlowLayout(FlowLayout.LEADING, 6, 0));
             leftHeader.setOpaque(false);
+            if (isOwn) {
+                leftHeader.setComponentOrientation(ComponentOrientation.RIGHT_TO_LEFT);
+            }
 
             JLabel senderLabel = new JLabel(senderName);
             senderLabel.setFont(AppFonts.BODY_BOLD);
@@ -631,9 +634,22 @@ public class ChatMessageItem extends JPanel {
         editedBadge.setBorder(BorderFactory.createEmptyBorder(2, 0, 0, 4));
 
         if (headerRow != null) {
-            headerRow.add(editedBadge, BorderLayout.EAST);
-            headerRow.revalidate();
-            headerRow.repaint();
+            JPanel leftHeader = null;
+            for (Component c : headerRow.getComponents()) {
+                if (c instanceof JPanel) {
+                    leftHeader = (JPanel) c;
+                    break;
+                }
+            }
+            if (leftHeader != null) {
+                leftHeader.add(editedBadge);
+                leftHeader.revalidate();
+                leftHeader.repaint();
+            } else {
+                headerRow.add(editedBadge, BorderLayout.EAST);
+                headerRow.revalidate();
+                headerRow.repaint();
+            }
         } else {
             // Tin nhắn gộp nhóm (compact) không có headerRow
             JPanel topWrap = new JPanel(new BorderLayout());
