@@ -4,6 +4,7 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
+    restart: always
     hostname: rabbitmq
     ports:
       - "5672:5672"
@@ -25,6 +26,7 @@ services:
   mysql-db:
     image: mysql:8.0
     container_name: mysql-db
+    restart: always
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -44,6 +46,7 @@ services:
   minio:
     image: minio/minio
     container_name: minio
+    restart: always
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
@@ -67,6 +70,7 @@ services:
       dockerfile: gateway-service/Dockerfile
     image: hoangnguyen1007/gateway-service:${IMAGE_TAG:-latest}
     container_name: gateway-service
+    restart: always
     ports:
       - "8080:8080"
     environment:
@@ -98,6 +102,7 @@ services:
       dockerfile: auth-service/Dockerfile
     image: hoangnguyen1007/auth-service:${IMAGE_TAG:-latest}
     container_name: auth-service
+    restart: always
     networks:
       - chat-net
     environment:
@@ -118,6 +123,7 @@ services:
       dockerfile: server-service/Dockerfile
     image: hoangnguyen1007/server-service:${IMAGE_TAG:-latest}
     container_name: server-service
+    restart: always
     networks:
       - chat-net
     environment:
@@ -140,6 +146,7 @@ services:
       dockerfile: channel-service/Dockerfile
     image: hoangnguyen1007/channel-service:${IMAGE_TAG:-latest}
     container_name: channel-service
+    restart: always
     networks:
       - chat-net
     environment:
@@ -158,6 +165,7 @@ services:
       dockerfile: messaging-service/Dockerfile
     image: hoangnguyen1007/messaging-service:${IMAGE_TAG:-latest}
     container_name: messaging-service
+    restart: always
     networks:
       - chat-net
     environment:
@@ -183,6 +191,7 @@ services:
       dockerfile: presence-service/Dockerfile
     image: hoangnguyen1007/presence-service:${IMAGE_TAG:-latest}
     container_name: presence-service
+    restart: always
     networks:
       - chat-net
     environment:
@@ -206,6 +215,7 @@ services:
       dockerfile: log-service/Dockerfile
     image: hoangnguyen1007/log-service:${IMAGE_TAG:-latest}
     container_name: log-service
+    restart: always
     networks:
       - chat-net
     environment:
@@ -225,6 +235,7 @@ services:
       dockerfile: notification-service/Dockerfile
     image: hoangnguyen1007/notification-service:${IMAGE_TAG:-latest}
     container_name: notification-service
+    restart: always
     environment:
       - JAVA_OPTS=-XX:+UseSerialGC -Xmx128m
       - SPRING_RABBITMQ_HOST=rabbitmq
@@ -250,6 +261,7 @@ services:
       dockerfile: file-service/Dockerfile
     image: hoangnguyen1007/file-service:${IMAGE_TAG:-latest}
     container_name: file-service
+    restart: always
     environment:
       - JAVA_OPTS=-XX:+UseSerialGC -Xmx256m
       - MINIO_ENDPOINT=http://minio:9000
@@ -274,6 +286,7 @@ services:
       dockerfile: role-service/Dockerfile
     image: hoangnguyen1007/role-service:${IMAGE_TAG:-latest}
     container_name: role-service
+    restart: always
     networks:
       - chat-net
     environment:
@@ -294,6 +307,7 @@ services:
       dockerfile: user-profile-service/Dockerfile
     image: hoangnguyen1007/user-profile-service:${IMAGE_TAG:-latest}
     container_name: user-profile-service
+    restart: always
     networks:
       - chat-net
     environment:
@@ -313,6 +327,7 @@ services:
       dockerfile: friend-service/Dockerfile
     image: hoangnguyen1007/friend-service:${IMAGE_TAG:-latest}
     container_name: friend-service
+    restart: always
     networks:
       - chat-net
     environment:
