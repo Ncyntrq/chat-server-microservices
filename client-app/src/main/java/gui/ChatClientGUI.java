@@ -588,8 +588,7 @@ public class ChatClientGUI extends JFrame {
             int highestPriority = -1;
             java.awt.Color bestColor = null;
             for (Object o : list) {
-                if (!(o instanceof Number n)) continue;
-                String rid = String.valueOf(n.longValue());
+                if (!(o instanceof String rid)) continue;
                 java.util.Map<String, Object> role = roleById.get(rid);
                 if (role == null) continue;
                 Object priObj = role.get("priority");
@@ -707,6 +706,14 @@ public class ChatClientGUI extends JFrame {
             serverSidebar.loadServers();
             friendSidebar.refreshUserFooter();
             channelSidebar.refreshUserFooter();
+            return;
+        }
+        if ("[SYSTEM_SERVER_UPDATE]".equals(msg.getContent())) {
+            if (msg.getServerId() != null) {
+                if (msg.getServerId().equals(activeServerId)) {
+                    loadPermissionsAndMembers(activeServerId);
+                }
+            }
             return;
         }
 
