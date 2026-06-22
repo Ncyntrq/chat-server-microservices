@@ -38,9 +38,10 @@ pipeline {
         stage('Build') {
             steps {
                 // Tối ưu:
+                // - Bỏ "clean" để dùng Incremental Build (chỉ build những service có code thay đổi, giữ lại cache cũ).
                 // -T 1C: Build song song nhiều module (1 luồng / CPU core)
-                // -Dmaven.test.skip=true: Không thèm compile test classes luôn (nhanh hơn -DskipTests)
-                sh 'mvn clean package -T 1C -Dmaven.test.skip=true --batch-mode'
+                // -Dmaven.test.skip=true: Không thèm compile test classes
+                sh 'mvn package -T 1C -Dmaven.test.skip=true --batch-mode'
             }
             post {
                 success {
@@ -116,7 +117,7 @@ pipeline {
                                         -f Dockerfile.template \
                                         -t "${DOCKER_REGISTRY}/${svc}:${IMAGE_TAG}" \
                                         -t "${DOCKER_REGISTRY}/${svc}:latest" \
-                                        .
+                                        "${svc}"
                                 """
                                 sh "docker push \"${DOCKER_REGISTRY}/${svc}:${IMAGE_TAG}\""
                                 sh "docker push \"${DOCKER_REGISTRY}/${svc}:latest\""
