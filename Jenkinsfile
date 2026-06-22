@@ -49,29 +49,6 @@ pipeline {
             }
         }
 
-        // stage('Static Analysis') {
-        //     steps {
-        //         withSonarQubeEnv('SonarQube') {
-        //             sh """
-        //                 mvn sonar:sonar \
-        //                     -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-        //                     -Dsonar.projectName='Chat Server Microservices' \
-        //                     -Dsonar.host.url=${SONAR_HOST_URL} \
-        //                     -Dsonar.token=${SONAR_AUTH_TOKEN} \
-        //                     --batch-mode -q
-        //             """
-        //         }
-        //     }
-        // }
-
-        // stage('Quality Gate') {
-        //     steps {
-        //         timeout(time: 5, unit: 'MINUTES') {
-        //             waitForQualityGate abortPipeline: true
-        //         }
-        //     }
-        // }
-
         stage('Dockerization & Push') {
             steps {
                 script {
@@ -137,8 +114,9 @@ pipeline {
                     }
                     sh """
                         docker network create chat-net || true
-                        IMAGE_TAG=${IMAGE_TAG} docker-compose -f "${COMPOSE_FILE_APP}" pull --quiet || true
-                        IMAGE_TAG=${IMAGE_TAG} docker-compose -f "${COMPOSE_FILE_APP}" up -d --remove-orphans
+                        IMAGE_TAG=${IMAGE_TAG} docker-compose -f "${COMPOSE_FILE_APP}" -f "${COMPOSE_FILE_DEV}" down
+                        IMAGE_TAG=${IMAGE_TAG} docker-compose -f "${COMPOSE_FILE_APP}" -f "${COMPOSE_FILE_DEV}" pull --quiet || true
+                        IMAGE_TAG=${IMAGE_TAG} docker-compose -f "${COMPOSE_FILE_APP}" -f "${COMPOSE_FILE_DEV}" up -d --build --remove-orphans
                     """
                 }
             }
