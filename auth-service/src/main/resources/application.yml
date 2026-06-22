@@ -32,3 +32,15 @@ management:
     metrics:
       export:
         enabled: true
+  # ===== DISTRIBUTED TRACING =====
+  tracing:
+    sampling:
+      probability: 1.0   # 100% sampling — giảm xuống 0.1 (10%) cho production
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://jaeger:4318}/v1/traces
+
+# Kích hoạt Spring profile để logback-spring.xml dùng JSON appender
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:docker}
