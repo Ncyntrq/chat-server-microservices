@@ -37,7 +37,10 @@ pipeline {
 
         stage('Build') {
             steps {
-                sh 'mvn clean package -DskipTests --batch-mode'
+                // Tối ưu:
+                // -T 1C: Build song song nhiều module (1 luồng / CPU core)
+                // -Dmaven.test.skip=true: Không thèm compile test classes luôn (nhanh hơn -DskipTests)
+                sh 'mvn clean package -T 1C -Dmaven.test.skip=true --batch-mode'
             }
             post {
                 success {
@@ -75,6 +78,15 @@ pipeline {
         stage('Dockerization & Push') {
             steps {
                 script {
+                    // Đăng nhập Docker Hub 1 lần duy nhất trước khi build song song
+                    withCredentials([usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh 'echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin'
+                    }
+
                     def services = env.SERVICES.trim().split('\\s+')
                     def portMap = [
                         'gateway-service'      : '8080',
@@ -106,15 +118,8 @@ pipeline {
                                         -t "${DOCKER_REGISTRY}/${svc}:latest" \
                                         .
                                 """
-                                withCredentials([usernamePassword(
-                                    credentialsId: 'dockerhub-credentials',
-                                    usernameVariable: 'DOCKER_USER',
-                                    passwordVariable: 'DOCKER_PASS'
-                                )]) {
-                                    sh 'echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin'
-                                    sh "docker push \"${DOCKER_REGISTRY}/${svc}:${IMAGE_TAG}\""
-                                    sh "docker push \"${DOCKER_REGISTRY}/${svc}:latest\""
-                                }
+                                sh "docker push \"${DOCKER_REGISTRY}/${svc}:${IMAGE_TAG}\""
+                                sh "docker push \"${DOCKER_REGISTRY}/${svc}:latest\""
                             }
                         }
                     }
