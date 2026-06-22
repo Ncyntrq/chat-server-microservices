@@ -79,17 +79,19 @@
                 <artifactId>logstash-logback-encoder</artifactId>
                 <version>${logstash-logback-encoder.version}</version>
             </dependency>
-            <!-- OTLP Exporter: chỉ cần runtime (Spring auto-config nạp qua SPI)
-                 → không vào compile classpath → giảm thời gian compile -->
+            <!-- OTLP Exporter: runtime scope - Spring auto-config loads via SPI,
+                 not needed on compile classpath. Version from opentelemetry-bom import. -->
             <dependency>
                 <groupId>io.opentelemetry</groupId>
                 <artifactId>opentelemetry-exporter-otlp</artifactId>
+                <version>${opentelemetry.version}</version>
                 <scope>runtime</scope>
             </dependency>
-            <!-- Micrometer Tracing Bridge: cũng chỉ cần runtime -->
+            <!-- Micrometer Tracing Bridge: runtime scope. Version from micrometer-tracing-bom import. -->
             <dependency>
                 <groupId>io.micrometer</groupId>
                 <artifactId>micrometer-tracing-bridge-otel</artifactId>
+                <version>${micrometer-tracing.version}</version>
                 <scope>runtime</scope>
             </dependency>
         </dependencies>
