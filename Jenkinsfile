@@ -137,8 +137,8 @@ pipeline {
                     }
                     sh """
                         docker network create chat-net || true
-                        IMAGE_TAG=${IMAGE_TAG} docker compose -f "${COMPOSE_FILE_APP}" pull --quiet || true
-                        IMAGE_TAG=${IMAGE_TAG} docker compose -f "${COMPOSE_FILE_APP}" up -d --remove-orphans
+                        IMAGE_TAG=${IMAGE_TAG} docker-compose -f "${COMPOSE_FILE_APP}" pull --quiet || true
+                        IMAGE_TAG=${IMAGE_TAG} docker-compose -f "${COMPOSE_FILE_APP}" up -d --remove-orphans
                     """
                 }
             }
