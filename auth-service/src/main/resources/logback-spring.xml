@@ -18,7 +18,6 @@
             <timestampPattern>yyyy-MM-dd'T'HH:mm:ss.SSS'Z'</timestampPattern>
             <timeZone>UTC</timeZone>
             <!-- Include MDC fields: traceId, spanId tự động inject bởi Micrometer -->
-            <includeMdcKeyNames>traceId,spanId,parentId,sampled</includeMdcKeyNames>
             <!-- Bỏ fields không cần thiết để giảm size log -->
             <fieldNames>
                 <timestamp>@timestamp</timestamp>
