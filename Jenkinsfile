@@ -37,7 +37,7 @@ pipeline {
 
         stage('Build') {
             steps {
-                sh 'mvn clean package -DskipTests -q --batch-mode'
+                sh 'mvn clean package -DskipTests --batch-mode'
             }
             post {
                 success {
