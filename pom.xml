@@ -34,7 +34,6 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <!-- Observability -->
         <micrometer-tracing.version>1.2.4</micrometer-tracing.version>
-        <opentelemetry.version>1.36.0</opentelemetry.version>
         <logstash-logback-encoder.version>7.4</logstash-logback-encoder.version>
     </properties>
 
@@ -55,19 +54,11 @@
                 <scope>import</scope>
             </dependency>
             <!-- ===== OBSERVABILITY BOM ===== -->
-            <!-- Micrometer Tracing BOM — quản lý version cho bridge-otel, brave... -->
+            <!-- Micrometer Tracing BOM — quản lý đồng nhất TẤT CẢ OTel versions -->
             <dependency>
                 <groupId>io.micrometer</groupId>
                 <artifactId>micrometer-tracing-bom</artifactId>
                 <version>${micrometer-tracing.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <!-- OpenTelemetry BOM — quản lý version cho OTLP exporter, SDK... -->
-            <dependency>
-                <groupId>io.opentelemetry</groupId>
-                <artifactId>opentelemetry-bom</artifactId>
-                <version>${opentelemetry.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -76,21 +67,6 @@
                 <groupId>net.logstash.logback</groupId>
                 <artifactId>logstash-logback-encoder</artifactId>
                 <version>${logstash-logback-encoder.version}</version>
-            </dependency>
-            <!-- OTLP Exporter: runtime scope - Spring auto-config loads via SPI,
-                 not needed on compile classpath. Version from opentelemetry-bom import. -->
-            <dependency>
-                <groupId>io.opentelemetry</groupId>
-                <artifactId>opentelemetry-exporter-otlp</artifactId>
-                <version>${opentelemetry.version}</version>
-                <scope>runtime</scope>
-            </dependency>
-            <!-- Micrometer Tracing Bridge: runtime scope. Version from micrometer-tracing-bom import. -->
-            <dependency>
-                <groupId>io.micrometer</groupId>
-                <artifactId>micrometer-tracing-bridge-otel</artifactId>
-                <version>${micrometer-tracing.version}</version>
-                <scope>runtime</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
