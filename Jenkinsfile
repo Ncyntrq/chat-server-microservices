@@ -104,28 +104,38 @@ pipeline {
                         'friend-service'       : '8092'
                     ]
 
-                    def buildTasks = [:]
-
-                    services.each { svc ->
+                    // Chia thành batch 4 để không nghẹt Disk I/O của VPS khi COPY JAR song song
+                    def batchSize = 4
+                    def batches = []
+                    def current = [:]
+                    services.eachWithIndex { svc, idx ->
                         def port = portMap[svc] ?: '8080'
-                        buildTasks[svc] = {
+                        current[svc] = {
                             stage("Build & Push ${svc}") {
                                 sh """
-                                    docker build \
-                                        --build-arg SERVICE_NAME="${svc}" \
-                                        --build-arg EXPOSED_PORT="${port}" \
-                                        -f Dockerfile.template \
-                                        -t "${DOCKER_REGISTRY}/${svc}:${IMAGE_TAG}" \
-                                        -t "${DOCKER_REGISTRY}/${svc}:latest" \
+                                    docker build \\
+                                        --build-arg SERVICE_NAME="${svc}" \\
+                                        --build-arg EXPOSED_PORT="${port}" \\
+                                        -f Dockerfile.template \\
+                                        -t "${DOCKER_REGISTRY}/${svc}:${IMAGE_TAG}" \\
+                                        -t "${DOCKER_REGISTRY}/${svc}:latest" \\
                                         "${svc}"
                                 """
                                 sh "docker push \"${DOCKER_REGISTRY}/${svc}:${IMAGE_TAG}\""
                                 sh "docker push \"${DOCKER_REGISTRY}/${svc}:latest\""
                             }
                         }
+                        if (current.size() == batchSize || idx == services.length - 1) {
+                            batches << current.clone()
+                            current = [:]
+                        }
                     }
 
-                    parallel buildTasks
+                    // Chạy từng batch: mỗi batch 4 services song song, sau khi xong mới chạy batch tiếp theo
+                    batches.eachWithIndex { batch, batchIdx ->
+                        echo "=== Batch ${batchIdx + 1}/${batches.size()}: ${batch.keySet().join(', ')} ==="
+                        parallel batch
+                    }
                 }
             }
             post {

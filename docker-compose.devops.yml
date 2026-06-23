@@ -110,8 +110,7 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_ROOT_URL=http://localhost:3001
       - GF_ANALYTICS_REPORTING_ENABLED=false
-      # Cài plugin Loki datasource (có sẵn từ Grafana 9+)
-      - GF_INSTALL_PLUGINS=grafana-jaeger-datasource
+      # Jaeger datasource đã được tích hợp sẵn từ Grafana 10+, không cần cài thêm
     volumes:
       - grafana-data:/var/lib/grafana
       - ./devops/grafana/provisioning:/etc/grafana/provisioning:ro
