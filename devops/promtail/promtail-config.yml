@@ -69,7 +69,7 @@ scrape_configs:
             traceId: traceId
             spanId: spanId
             thread: thread_name
-            timestamp: "@timestamp"
+            timestamp: '"@timestamp"'
             service_field: service
 
       # Bước 2: Đặt timestamp từ log JSON (không dùng thời gian ingestion)

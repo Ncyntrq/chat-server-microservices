@@ -100,7 +100,7 @@ services:
       retries: 5
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.4.2
     container_name: grafana
     ports:
       - "3001:3000"
@@ -163,7 +163,7 @@ services:
   # Query qua Grafana datasource
   # ================================================================
   loki:
-    image: grafana/loki:2.9.8
+    image: grafana/loki:3.0.0
     container_name: loki
     restart: unless-stopped
     ports:
@@ -186,7 +186,7 @@ services:
   # Không expose port ra ngoài
   # ================================================================
   promtail:
-    image: grafana/promtail:2.9.8
+    image: grafana/promtail:3.0.0
     container_name: promtail
     restart: unless-stopped
     volumes:
